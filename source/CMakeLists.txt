@@ -1,10 +1,13 @@
 set(YOSHIPBR_SOURCE_FILES
+    common/ysMath.cpp
     geo/ysTriangle.cpp
     )
 
 set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/YoshiPBR.h
+    ../include/YoshiPBR/ysMath.h
     ../include/YoshiPBR/ysTriangle.h
+    ../include/YoshiPBR/ysTypes.h
     )
 
 add_library(YoshiPBR STATIC ${YOSHIPBR_SOURCE_FILES} ${YOSHIPBR_HEADER_FILES})
