@@ -1,12 +1,20 @@
 #pragma once
 
-#include "YoshiPBR/ysMath.h"
+#include "YoshiPBR/ysTypes.h"
+#include "YoshiPBR/ysBVH.h"
+
+struct ysShape;
+struct ysTriangle;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ysTriangle
+struct ysScene
 {
-    ysVec4 m_v[3]; // vertices
-    ysVec4 m_n;    // normal
-    ysVec4 m_t;    // tangent
+    ysBVH m_bvh;
+
+    ysShape* m_shapes;
+    ys_int32 m_shapeCount;
+
+    ysTriangle* m_triangles;
+    ys_int32 m_triangleCount;
 };
