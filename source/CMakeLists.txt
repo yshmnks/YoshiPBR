@@ -1,5 +1,7 @@
 set(YOSHIPBR_SOURCE_FILES
+	common/ysDebugDraw.cpp
     common/ysMath.cpp
+	common/ysStructures.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp
     geo/ysShape.cpp
@@ -13,9 +15,11 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysArrayG.h
     ../include/YoshiPBR/ysArrayGF.h
     ../include/YoshiPBR/ysBVH.h
+	../include/YoshiPBR/ysDebugDraw.h
     ../include/YoshiPBR/ysMath.h
     ../include/YoshiPBR/ysScene.h
     ../include/YoshiPBR/ysShape.h
+	../include/YoshiPBR/ysStructures.h
     ../include/YoshiPBR/ysTriangle.h
     ../include/YoshiPBR/ysTypes.h
     )

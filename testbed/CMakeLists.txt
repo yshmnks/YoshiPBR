@@ -4,6 +4,8 @@ set (TESTBED_SOURCE_FILES
 	main.cpp
     draw.cpp
     draw.h
+	scenePreview.cpp
+	scenePreview.h
 	imgui_impl_glfw.cpp
 	imgui_impl_glfw.h
 	imgui_impl_opengl3.cpp
