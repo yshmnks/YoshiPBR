@@ -6,11 +6,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysAABB
 {
-    void SetInvalid()
-    {
-        m_min = ysVec4_maxFloat;
-        m_max = -ysVec4_maxFloat;
-    }
+    void SetInvalid();
+    bool Contains(const ysAABB&) const;
+
+    static ysAABB Merge(const ysAABB&, const ysAABB&);
 
     ysVec4 m_min;
     ysVec4 m_max;

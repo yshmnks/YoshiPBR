@@ -98,7 +98,12 @@ struct ysBVHBuilder
     //
     void Build(ysBVH* output, const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int32 leafCount, ys_int32 delta)
     {
-        ysAssert(delta >= 2);
+        ysAssert(delta >= 2 && leafCount >= 0);
+        if (leafCount == 0)
+        {
+            output->Reset();
+            return;
+        }
         m_delta = delta;
         m_leafCount = leafCount;
         m_clusterCapacity = 2 * leafCount - 1;
@@ -326,9 +331,7 @@ struct ysBVHBuilder
             }
             Cluster* clusterB = m_clusters + clusterIdxB;
             ysAssert(ysAllLE3(clusterB->m_aabb.m_min, clusterB->m_aabb.m_max));
-            ysAABB mergedAABB;
-            mergedAABB.m_min = ysMin(clusterA->m_aabb.m_min, clusterB->m_aabb.m_min);
-            mergedAABB.m_max = ysMax(clusterA->m_aabb.m_max, clusterB->m_aabb.m_max);
+            ysAABB mergedAABB = ysAABB::Merge(clusterA->m_aabb, clusterB->m_aabb);
             ysVec4 mergedAABBSpan = mergedAABB.m_max - mergedAABB.m_min;
             ys_float32 mergedAABBArea
                 = mergedAABBSpan.x * mergedAABBSpan.y
@@ -392,8 +395,7 @@ struct ysBVHBuilder
             nodeLUR->m_parent = ys_nullIndex;
             nodeL->m_parent = idxLUR;
             nodeR->m_parent = idxLUR;
-            nodeLUR->m_aabb.m_min = ysMin(nodeL->m_aabb.m_min, nodeR->m_aabb.m_min);
-            nodeLUR->m_aabb.m_max = ysMax(nodeL->m_aabb.m_max, nodeR->m_aabb.m_max);
+            nodeLUR->m_aabb = ysAABB::Merge(nodeL->m_aabb, nodeR->m_aabb);
             nodeLUR->m_primCount = nodeL->m_primCount + nodeR->m_primCount;
 
             // Remove L and R from the cluster list
@@ -503,11 +505,38 @@ void ysBVH::Build(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int
     ysBVHBuilder builder;
     ys_int32 delta = 2;
     builder.Build(this, leafAABBs, leafShapeIds, leafCount, delta);
+
+    // Validation
+    ysAssert((leafCount == 0) == (m_nodeCount == 0));
+    ysAssert(m_nodeCount == 0 || m_nodeCount == 2 * leafCount - 1);
+    if (m_nodeCount == 0)
+    {
+        return;
+    }
+    ysAssert(m_nodes[0].m_parent == ys_nullIndex);
+    ysAssert(m_nodes[0].m_left == ys_nullIndex || (0 < m_nodes[0].m_left && m_nodes[0].m_left < m_nodeCount));
+    ysAssert(m_nodes[0].m_right == ys_nullIndex || (0 < m_nodes[0].m_right && m_nodes[0].m_right < m_nodeCount));
+    ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_right == ys_nullIndex));
+    ysAssert(m_nodes[0].m_left == ys_nullIndex || m_nodes[0].m_left != m_nodes[0].m_right);
+    ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
+    for (ys_int32 i = 1; i < m_nodeCount; ++i)
+    {
+        const Node* node = m_nodes + i;
+        ysAssert(node->m_left == ys_nullIndex || (i < node->m_left && node->m_left < m_nodeCount));
+        ysAssert(node->m_right == ys_nullIndex || (i < node->m_right && node->m_right < m_nodeCount));
+        ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
+        ysAssert(node->m_left == ys_nullIndex || node->m_left != node->m_right);
+        ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
+        ysAssert(0 <= node->m_parent && node->m_parent < i);
+        const Node* parent = m_nodes + node->m_parent;
+        ysAssert(parent->m_aabb.Contains(node->m_aabb));
+        ysAssert(parent->m_left == i || parent->m_right == i);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysBVH::DebugDraw(const ysDrawBVHInput*) const
+void ysBVH::DebugDraw(const ysDrawBVHInput* input) const
 {
 
 }
