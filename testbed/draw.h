@@ -46,6 +46,9 @@ struct DebugDraw : public ysDebugDraw
     void Flush();
 
     bool m_showUI;
+    bool m_drawBVH;
+    bool m_drawGeo;
+
     GLRenderLines* m_lines;
     GLRenderTriangles* m_triangles;
 };

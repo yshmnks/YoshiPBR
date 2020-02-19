@@ -3,6 +3,8 @@
 #include "YoshiPBR/ysTypes.h"
 #include "YoshiPBR/ysBVH.h"
 
+struct ysDrawInputGeo;
+struct ysSceneDef;
 struct ysShape;
 struct ysTriangle;
 
@@ -10,6 +12,12 @@ struct ysTriangle;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysScene
 {
+    void Reset();
+    void Create(const ysSceneDef*);
+    void Destroy();
+
+    void DebugDrawGeo(const ysDrawInputGeo*) const;
+
     ysBVH m_bvh;
 
     ysShape* m_shapes;

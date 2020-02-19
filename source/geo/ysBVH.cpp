@@ -1,5 +1,6 @@
 #include "YoshiPBR/ysBVH.h"
-#include "YoshiPBR/ysArrayG.h"
+#include "YoshiPBR/ysDebugDraw.h"
+#include "YoshiPBR/ysStructures.h"
 
 #include <algorithm>
 
@@ -28,7 +29,7 @@ static ys_uint64 sInterleaveUint21s(const ys_uint64& a, const ys_uint64& b, cons
     ys_uint64 aSparse = sSparsifyUint21(a);
     ys_uint64 bSparse = sSparsifyUint21(b);
     ys_uint64 cSparse = sSparsifyUint21(c);
-    return aSparse | (bSparse << 1) | (cSparse << 2);
+    return (aSparse << 2) | (bSparse << 1) | (cSparse << 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +102,8 @@ struct ysBVHBuilder
         ysAssert(delta >= 2 && leafCount >= 0);
         if (leafCount == 0)
         {
-            output->Reset();
+            output->m_nodes = nullptr;
+            output->m_nodeCount = 0;
             return;
         }
         m_delta = delta;
@@ -116,7 +118,7 @@ struct ysBVHBuilder
         {
             ysVec4 center = (leafAABBs[i].m_min + leafAABBs[i].m_max) * ysVec4_half;
             centersAABB.m_min = ysMin(centersAABB.m_min, center);
-            centersAABB.m_max = ysMin(centersAABB.m_max, center);
+            centersAABB.m_max = ysMax(centersAABB.m_max, center);
         }
         ysVec4 invCentersSpan = ysVec4_one / (centersAABB.m_max - centersAABB.m_min);
 
@@ -199,7 +201,6 @@ struct ysBVHBuilder
         }
 
         ysAssert(m_nodeCount == m_nodeCapacity);
-        output->Reset();
         output->m_nodeCount = m_nodeCount;
         output->m_nodes = static_cast<ysBVH::Node*>(ysMalloc(sizeof(ysBVH::Node) * m_nodeCount));
         for (ys_int32 i = 0; i < m_nodeCount; ++i)
@@ -213,6 +214,8 @@ struct ysBVHBuilder
             dst->m_right = (src->m_right == ys_nullIndex) ? ys_nullIndex : m_clusters[src->m_right].m_remap;
             ysAssert((dst->m_left == ys_nullIndex) == (dst->m_right == ys_nullIndex));
         }
+
+        ysFree(m_clusters);
     }
 
     //
@@ -294,7 +297,7 @@ struct ysBVHBuilder
             clustersLUR.m_first = clustersL.m_first;
             clustersLUR.m_last = clustersR.m_last;
             clustersLUR.m_count = clustersL.m_count + clustersR.m_count;
-            return CombineClusters(clustersLUR, f(leafEnd - leafEnd));
+            return CombineClusters(clustersLUR, f(subLeafCount));
         }
         else
         {
@@ -398,26 +401,8 @@ struct ysBVHBuilder
             nodeLUR->m_aabb = ysAABB::Merge(nodeL->m_aabb, nodeR->m_aabb);
             nodeLUR->m_primCount = nodeL->m_primCount + nodeR->m_primCount;
 
-            // Remove L and R from the cluster list
+            // Remove L from the cluster list
             {
-                if (idxL == agglomeratedList.m_first)
-                {
-                    agglomeratedList.m_first = nodeL->m_next;
-                }
-                else if (idxR == agglomeratedList.m_first)
-                {
-                    agglomeratedList.m_first = nodeR->m_next;
-                }
-
-                if (idxL == agglomeratedList.m_last)
-                {
-                    agglomeratedList.m_last = nodeL->m_prev;
-                }
-                else if (idxR == agglomeratedList.m_last)
-                {
-                    agglomeratedList.m_last = nodeR->m_prev;
-                }
-
                 if (nodeL->m_prev != ys_nullIndex)
                 {
                     m_clusters[nodeL->m_prev].m_next = nodeL->m_next;
@@ -428,21 +413,47 @@ struct ysBVHBuilder
                     m_clusters[nodeL->m_next].m_prev = nodeL->m_prev;
                 }
 
+                if (idxL == agglomeratedList.m_first)
+                {
+                    agglomeratedList.m_first = nodeL->m_next;
+                }
+
+                if (idxL == agglomeratedList.m_last)
+                {
+                    agglomeratedList.m_last = nodeL->m_prev;
+                }
+
+                nodeL->m_prev = ys_nullIndex;
+                nodeL->m_next = ys_nullIndex;
+                agglomeratedList.m_count--;
+                ysAssert(agglomeratedList.m_count >= 0);
+            }
+
+            // Remove R from the cluster list
+            {
                 if (nodeR->m_prev != ys_nullIndex)
                 {
                     m_clusters[nodeR->m_prev].m_next = nodeR->m_next;
                 }
+
                 if (nodeR->m_next != ys_nullIndex)
                 {
                     m_clusters[nodeR->m_next].m_prev = nodeR->m_prev;
                 }
 
-                nodeL->m_prev = ys_nullIndex;
-                nodeL->m_next = ys_nullIndex;
+                if (idxR == agglomeratedList.m_first)
+                {
+                    agglomeratedList.m_first = nodeR->m_next;
+                }
+
+                if (idxR == agglomeratedList.m_last)
+                {
+                    agglomeratedList.m_last = nodeR->m_prev;
+                }
+
                 nodeR->m_prev = ys_nullIndex;
                 nodeR->m_next = ys_nullIndex;
-
-                agglomeratedList.m_count -= 2;
+                agglomeratedList.m_count--;
                 ysAssert(agglomeratedList.m_count >= 0);
             }
 
@@ -451,7 +462,6 @@ struct ysBVHBuilder
                 nodeLUR->m_prev = agglomeratedList.m_last;
                 if (agglomeratedList.m_last != ys_nullIndex)
                 {
-                    ysAssert(agglomeratedList.m_first != agglomeratedList.m_last);
                     m_clusters[agglomeratedList.m_last].m_next = idxLUR;
                     agglomeratedList.m_last = idxLUR;
                 }
@@ -500,10 +510,18 @@ struct ysBVHBuilder
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysBVH::Build(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int32 leafCount)
+void ysBVH::Reset()
+{
+    m_nodes = nullptr;
+    m_nodeCount = 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysBVH::Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int32 leafCount)
 {
     ysBVHBuilder builder;
-    ys_int32 delta = 2;
+    ys_int32 delta = 8;
     builder.Build(this, leafAABBs, leafShapeIds, leafCount, delta);
 
     // Validation
@@ -518,7 +536,7 @@ void ysBVH::Build(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int
     ysAssert(m_nodes[0].m_right == ys_nullIndex || (0 < m_nodes[0].m_right && m_nodes[0].m_right < m_nodeCount));
     ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_right == ys_nullIndex));
     ysAssert(m_nodes[0].m_left == ys_nullIndex || m_nodes[0].m_left != m_nodes[0].m_right);
-    ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
+    //ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
     for (ys_int32 i = 1; i < m_nodeCount; ++i)
     {
         const Node* node = m_nodes + i;
@@ -526,7 +544,7 @@ void ysBVH::Build(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int
         ysAssert(node->m_right == ys_nullIndex || (i < node->m_right && node->m_right < m_nodeCount));
         ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
         ysAssert(node->m_left == ys_nullIndex || node->m_left != node->m_right);
-        ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
+        //ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
         ysAssert(0 <= node->m_parent && node->m_parent < i);
         const Node* parent = m_nodes + node->m_parent;
         ysAssert(parent->m_aabb.Contains(node->m_aabb));
@@ -536,7 +554,60 @@ void ysBVH::Build(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysBVH::DebugDraw(const ysDrawBVHInput* input) const
+void ysBVH::Destroy()
 {
+    ysFree(m_nodes);
+    m_nodes = nullptr;
+}
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
+{
+    ysVec4 verts[12][2];
+    Color colors[12];
+    for (ys_int32 i = 0; i < 12; ++i)
+    {
+        colors[i] = Color(1.0f, 1.0f, 1.0f);
+    }
+
+    for (ys_int32 i = 0; i < m_nodeCount; ++i)
+    {
+        const Node* node = m_nodes + i;
+        const ysAABB& aabb = node->m_aabb;
+        ysVec4 corners[2][2][2];
+        corners[0][0][0] = aabb.m_min;
+        corners[0][0][1] = ysVecSet(aabb.m_min.x, aabb.m_min.y, aabb.m_max.z);
+        corners[0][1][0] = ysVecSet(aabb.m_min.x, aabb.m_max.y, aabb.m_min.z);
+        corners[0][1][1] = ysVecSet(aabb.m_min.x, aabb.m_max.y, aabb.m_max.z);
+        corners[1][0][0] = ysVecSet(aabb.m_max.x, aabb.m_min.y, aabb.m_min.z);
+        corners[1][0][1] = ysVecSet(aabb.m_max.x, aabb.m_min.y, aabb.m_max.z);
+        corners[1][1][0] = ysVecSet(aabb.m_max.x, aabb.m_max.y, aabb.m_min.z);
+        corners[1][1][1] = aabb.m_max;
+        verts[0][0] = corners[0][0][0];
+        verts[0][1] = corners[1][0][0];
+        verts[1][0] = corners[1][0][0];
+        verts[1][1] = corners[1][1][0];
+        verts[2][0] = corners[1][1][0];
+        verts[2][1] = corners[0][1][0];
+        verts[3][0] = corners[0][1][0];
+        verts[3][1] = corners[0][0][0];
+        verts[4][0] = corners[0][0][1];
+        verts[4][1] = corners[1][0][1];
+        verts[5][0] = corners[1][0][1];
+        verts[5][1] = corners[1][1][1];
+        verts[6][0] = corners[1][1][1];
+        verts[6][1] = corners[0][1][1];
+        verts[7][0] = corners[0][1][1];
+        verts[7][1] = corners[0][0][1];
+        verts[8][0] = corners[0][0][0];
+        verts[8][1] = corners[0][0][1];
+        verts[9][0] = corners[1][0][0];
+        verts[9][1] = corners[1][0][1];
+        verts[10][0] = corners[1][1][0];
+        verts[10][1] = corners[1][1][1];
+        verts[11][0] = corners[0][1][0];
+        verts[11][1] = corners[0][1][1];
+        input->debugDraw->DrawSegmentList(&verts[0][0], colors, 12);
+    }
 }

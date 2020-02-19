@@ -15,6 +15,7 @@
 #define ysMemCpy(dst, src, byteCount) memcpy(dst, src, byteCount)
 #define ysMalloc(byteCount) _aligned_malloc(byteCount, 16)
 #define ysMallocAlign(byteCount, byteAlignment) _aligned_malloc(byteCount, byteAlignment)
+#define ysFree(x) _aligned_free(x)
 
 typedef signed char	ys_int8;
 typedef signed short ys_int16;

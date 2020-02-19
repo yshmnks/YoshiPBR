@@ -20,7 +20,7 @@ bool ysAABB::Contains(const ysAABB& aabb) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ysAABB ysAABB::Merge(const ysAABB& a, const ysAABB& b)
 {
-    ysAssert(ysAllLE3(a.m_min, b.m_max) && ysAllLE3(b.m_min, b.m_max));
+    ysAssert(ysAllLE3(a.m_min, a.m_max) && ysAllLE3(b.m_min, b.m_max));
     ysAABB ab;
     ab.m_min = ysMin(a.m_min, b.m_min);
     ab.m_max = ysMax(a.m_max, b.m_max);

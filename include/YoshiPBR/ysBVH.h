@@ -3,7 +3,7 @@
 #include "YoshiPBR/ysAABB.h"
 #include "YoshiPBR/ysShape.h"
 
-struct ysDrawBVHInput;
+struct ysDrawInputBVH;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,20 +26,11 @@ struct ysBVH
         ys_int32 m_right;
     };
 
-    ysBVH()
-    {
-        Reset();
-    }
+    void Reset();
+    void Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int32 leafCount);
+    void Destroy();
 
-    void Reset()
-    {
-        m_nodes = nullptr;
-        m_nodeCount = 0;
-    }
-
-    void Build(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int32 leafCount);
-
-    void DebugDraw(const ysDrawBVHInput*) const;
+    void DebugDraw(const ysDrawInputBVH*) const;
 
     Node* m_nodes; // Sorted so that parents proceed children
     ys_int32 m_nodeCount;

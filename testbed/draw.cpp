@@ -563,6 +563,9 @@ struct GLRenderTriangles
 DebugDraw::DebugDraw()
 {
     m_showUI = true;
+    m_drawBVH = true;
+    m_drawGeo = true;
+
     m_lines = nullptr;
     m_triangles = nullptr;
 }
