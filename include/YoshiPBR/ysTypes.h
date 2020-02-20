@@ -28,8 +28,9 @@ typedef signed long long ys_uint64;
 typedef float ys_float32;
 typedef double ys_float64;
 
-#define	ys_maxFloat		FLT_MAX
-#define	ys_epsilon		FLT_EPSILON
-#define ys_pi			3.14159265359f
+#define	ys_maxFloat     FLT_MAX
+#define	ys_epsilon      FLT_EPSILON
+#define ys_pi           3.14159265359f
+#define ys_2pi          6.28318530717f
 
 #define ys_nullIndex    (-1)

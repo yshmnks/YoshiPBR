@@ -1,5 +1,7 @@
 #include "YoshiPBR/ysMath.h"
 
+#include <algorithm>
+
 const ysVec4 ysQuat_identity = { 0.0f, 0.0f, 0.0f, 1.0f };
 const ysVec4 ysVec4_zero = { 0.0f, 0.0f, 0.0f, 0.0f };
 const ysVec4 ysVec4_half = { 0.5f, 0.5f, 0.5f, 0.5f };
@@ -456,4 +458,37 @@ ysTransform ysMul(const ysTransform& xf2, const ysTransform& xf1)
 ysVec4 ysMul(const ysTransform& xf, const ysVec4& p)
 {
     return xf.p + ysRotate(xf.q, p);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysRandom3(const ysVec4& min, const ysVec4& max)
+{
+    ysVec4 r = ysVecSet(
+        (ys_float32)std::rand() / RAND_MAX,
+        (ys_float32)std::rand() / RAND_MAX,
+        (ys_float32)std::rand() / RAND_MAX);
+    return r * min + (ysVec4_one - r) * max;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysRandomDir()
+{
+    ys_float32 u = (ys_float32)std::rand() / RAND_MAX;
+    ys_float32 v = (ys_float32)std::rand() / RAND_MAX;
+    ys_float32 phi = ys_2pi * u;
+    ys_float32 cosTheta = 2.0f * v - 1.0f;
+    ys_float32 sinTheta = sqrtf(ysMax(0.0f, 1.0f - cosTheta * cosTheta));
+    return ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysRandomQuat()
+{
+    ys_float32 r = (ys_float32)std::rand() / RAND_MAX;
+    ys_float32 angle = ys_2pi * r;
+    ysVec4 axis = ysRandomDir();
+    return ysQuatFromAxisAngle(axis, angle);
 }

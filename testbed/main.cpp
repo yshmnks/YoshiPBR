@@ -254,10 +254,20 @@ static void sCreateScene()
                 triangle->vertices[0] = ysVecSet(-0.25f, -0.25f, -0.25f);
                 triangle->vertices[1] = ysVecSet(0.25f, -0.25f, -0.25f);
                 triangle->vertices[2] = ysVecSet(0.25f, 0.25f, 0.25f);
+#if 0
                 ysVec4 asdf = ysVecSet(ys_float32(i), ys_float32(j), ys_float32(k)) * ysSplat(1.0f);
                 triangle->vertices[0] = triangle->vertices[0] + asdf;
                 triangle->vertices[1] = triangle->vertices[1] + asdf;
                 triangle->vertices[2] = triangle->vertices[2] + asdf;
+#else
+                ysTransform xf;
+                xf.q = ysRandomQuat();
+                xf.p = ysRandom3(ysVec4_zero, ysSplat(ys_float32(n)));
+                ysVec4 scale = ysRandom3(ysSplat(0.25f), ysSplat(4.0f));
+                triangle->vertices[0] = ysMul(xf, triangle->vertices[0] * scale);
+                triangle->vertices[1] = ysMul(xf, triangle->vertices[1] * scale);
+                triangle->vertices[2] = ysMul(xf, triangle->vertices[2] * scale);
+#endif
             }
         }
     }

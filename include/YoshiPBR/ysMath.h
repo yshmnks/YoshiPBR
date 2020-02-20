@@ -138,3 +138,7 @@ ysVec4 ysRotate(const ysVec4& q, const ysVec4& v);
 ysVec4 ysMulQQ(const ysVec4& q2, const ysVec4& q1);
 ysTransform ysMul(const ysTransform& xf2, const ysTransform& xf1);
 ysVec4 ysMul(const ysTransform& xf, const ysVec4& p);
+
+ysVec4 ysRandom3(const ysVec4& min, const ysVec4& max);
+ysVec4 ysRandomDir();
+ysVec4 ysRandomQuat();
