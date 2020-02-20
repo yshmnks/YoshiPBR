@@ -54,7 +54,11 @@ struct ysBVHBuilder
         ys_int32 m_next;
 
         ys_float32 m_bestCost;
-        ys_int32 m_bestMatch;
+        union
+        {
+            ys_int32 m_bestMatch;
+            ys_int32 m_depth;
+        };
 
         union
         {
@@ -104,6 +108,7 @@ struct ysBVHBuilder
         {
             output->m_nodes = nullptr;
             output->m_nodeCount = 0;
+            output->m_depth = 0;
             return;
         }
         m_delta = delta;
@@ -178,11 +183,12 @@ struct ysBVHBuilder
             // Not really necessary, but initializing this to null can be used to check for cycles.
             m_clusters[i].m_remap = ys_nullIndex;
         }
+        output->m_depth = 0;
 
-        const ys_int32 clusterIdxStackSize = 256;
-        ys_int32 clusterIdxStack[clusterIdxStackSize];
+        ys_int32* clusterIdxStack = static_cast<ys_int32*>(ysMalloc((sizeof(ys_int32) * m_clusterCapacity)));
         ys_int32 clusterIdxStackCount = 1;
         clusterIdxStack[0] = clusterList.m_first;
+        m_clusters[clusterList.m_first].m_depth = 0;
         ys_int32 nodeIdx = 0;
         while (clusterIdxStackCount > 0)
         {
@@ -195,10 +201,15 @@ struct ysBVHBuilder
             if (cluster->m_left != ys_nullIndex)
             {
                 ysAssert(cluster->m_left != cluster->m_right);
+                ysAssert(clusterIdxStackCount + 1 < m_clusterCapacity)
                 clusterIdxStack[clusterIdxStackCount++] = cluster->m_left;
                 clusterIdxStack[clusterIdxStackCount++] = cluster->m_right;
+                m_clusters[cluster->m_left].m_depth = cluster->m_depth + 1;
+                m_clusters[cluster->m_right].m_depth = cluster->m_depth + 1;
+                output->m_depth = ysMax(output->m_depth, cluster->m_depth + 1);
             }
         }
+        output->m_depth += 1;
 
         ysAssert(m_nodeCount == m_nodeCapacity);
         output->m_nodeCount = m_nodeCount;
@@ -215,6 +226,7 @@ struct ysBVHBuilder
             ysAssert((dst->m_left == ys_nullIndex) == (dst->m_right == ys_nullIndex));
         }
 
+        ysFree(clusterIdxStack);
         ysFree(m_clusters);
     }
 
@@ -514,6 +526,7 @@ void ysBVH::Reset()
 {
     m_nodes = nullptr;
     m_nodeCount = 0;
+    m_depth = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -525,30 +538,32 @@ void ysBVH::Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_in
     builder.Build(this, leafAABBs, leafShapeIds, leafCount, delta);
 
     // Validation
-    ysAssert((leafCount == 0) == (m_nodeCount == 0));
-    ysAssert(m_nodeCount == 0 || m_nodeCount == 2 * leafCount - 1);
-    if (m_nodeCount == 0)
     {
-        return;
-    }
-    ysAssert(m_nodes[0].m_parent == ys_nullIndex);
-    ysAssert(m_nodes[0].m_left == ys_nullIndex || (0 < m_nodes[0].m_left && m_nodes[0].m_left < m_nodeCount));
-    ysAssert(m_nodes[0].m_right == ys_nullIndex || (0 < m_nodes[0].m_right && m_nodes[0].m_right < m_nodeCount));
-    ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_right == ys_nullIndex));
-    ysAssert(m_nodes[0].m_left == ys_nullIndex || m_nodes[0].m_left != m_nodes[0].m_right);
-    //ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
-    for (ys_int32 i = 1; i < m_nodeCount; ++i)
-    {
-        const Node* node = m_nodes + i;
-        ysAssert(node->m_left == ys_nullIndex || (i < node->m_left && node->m_left < m_nodeCount));
-        ysAssert(node->m_right == ys_nullIndex || (i < node->m_right && node->m_right < m_nodeCount));
-        ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
-        ysAssert(node->m_left == ys_nullIndex || node->m_left != node->m_right);
-        //ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
-        ysAssert(0 <= node->m_parent && node->m_parent < i);
-        const Node* parent = m_nodes + node->m_parent;
-        ysAssert(parent->m_aabb.Contains(node->m_aabb));
-        ysAssert(parent->m_left == i || parent->m_right == i);
+        ysAssert((leafCount == 0) == (m_nodeCount == 0));
+        ysAssert(m_nodeCount == 0 || m_nodeCount == 2 * leafCount - 1);
+        if (m_nodeCount == 0)
+        {
+            return;
+        }
+        ysAssert(m_nodes[0].m_parent == ys_nullIndex);
+        ysAssert(m_nodes[0].m_left == ys_nullIndex || (0 < m_nodes[0].m_left && m_nodes[0].m_left < m_nodeCount));
+        ysAssert(m_nodes[0].m_right == ys_nullIndex || (0 < m_nodes[0].m_right && m_nodes[0].m_right < m_nodeCount));
+        ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_right == ys_nullIndex));
+        ysAssert(m_nodes[0].m_left == ys_nullIndex || m_nodes[0].m_left != m_nodes[0].m_right);
+        //ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
+        for (ys_int32 i = 1; i < m_nodeCount; ++i)
+        {
+            const Node* node = m_nodes + i;
+            ysAssert(node->m_left == ys_nullIndex || (i < node->m_left && node->m_left < m_nodeCount));
+            ysAssert(node->m_right == ys_nullIndex || (i < node->m_right && node->m_right < m_nodeCount));
+            ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
+            ysAssert(node->m_left == ys_nullIndex || node->m_left != node->m_right);
+            //ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
+            ysAssert(0 <= node->m_parent && node->m_parent < i);
+            const Node* parent = m_nodes + node->m_parent;
+            ysAssert(parent->m_aabb.Contains(node->m_aabb));
+            ysAssert(parent->m_left == i || parent->m_right == i);
+        }
     }
 }
 
@@ -572,6 +587,11 @@ void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
         {
             input->debugDraw->DrawOBB(m_nodes[i].m_aabb, ysTransform_identity, color);
         }
+        return;
+    }
+
+    if (input->depth > m_depth - 1)
+    {
         return;
     }
 

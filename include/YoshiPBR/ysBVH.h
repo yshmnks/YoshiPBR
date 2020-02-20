@@ -32,6 +32,8 @@ struct ysBVH
 
     void DebugDraw(const ysDrawInputBVH*) const;
 
-    Node* m_nodes; // Sorted so that parents proceed children
+    Node* m_nodes; // Sorted so that parents preceed children
     ys_int32 m_nodeCount;
+
+    ys_int32 m_depth;
 };
