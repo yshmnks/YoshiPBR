@@ -132,7 +132,16 @@ struct ysBVHBuilder
             centersAABB.m_min = ysMin(centersAABB.m_min, center);
             centersAABB.m_max = ysMax(centersAABB.m_max, center);
         }
-        ysVec4 invCentersSpan = ysVec4_one / (centersAABB.m_max - centersAABB.m_min);
+
+        // Compute zOrder using the cube with the centers-AABB squashed into the lowest zOrder corner. Under the assumption that leaf shapes
+        // have reasonably uniform aspect ratio and are distrbuted roughly uniformly throughout the bounds, this will bias partitioning
+        // across the longest AABB axis at each depth.
+        ysVec4 invCentersCubeSpan;
+        {
+            ysVec4 centersSpan = centersAABB.m_max - centersAABB.m_min;
+            ys_float32 centersSpanMax = ysMax(ysMax(centersSpan.x, centersSpan.y), centersSpan.z);
+            invCentersCubeSpan = (centersSpanMax < ys_epsilon) ? ysVec4_zero : ysSplat(1.0f / centersSpanMax);
+        }
 
         // Convert a float in range [0.0f, 1.0f] to a 21 bit integer in range [0, (1<<21)-1];
         const ysVec4 f2i = ysSplat(float((1 << 21) - 1));
@@ -140,7 +149,7 @@ struct ysBVHBuilder
         for (ys_int32 i = 0; i < leafCount; ++i)
         {
             ysVec4 center = (leafAABBs[i].m_min + leafAABBs[i].m_max) * ysVec4_half;
-            ysVec4 centerNorm = (center - centersAABB.m_min) * invCentersSpan;
+            ysVec4 centerNorm = (center - centersAABB.m_min) * invCentersCubeSpan;
             centerNorm = ysClamp(centerNorm, ysVec4_zero, ysVec4_one);
             ysVec4 centerGrid = centerNorm * f2i;
             ys_uint64 centerGridX = (ys_uint64)centerGrid.x;

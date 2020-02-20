@@ -262,7 +262,7 @@ static void sCreateScene()
 #else
                 ysTransform xf;
                 xf.q = ysRandomQuat();
-                xf.p = ysRandom3(ysVec4_zero, ysSplat(ys_float32(n)));
+                xf.p = ysRandom3(ysVec4_zero, ysSplat(ys_float32(n)) * ysVecSet(1.0f, 2.0f, 4.0f));
                 ysVec4 scale = ysRandom3(ysSplat(0.25f), ysSplat(4.0f));
                 triangle->vertices[0] = ysMul(xf, triangle->vertices[0] * scale);
                 triangle->vertices[1] = ysMul(xf, triangle->vertices[1] * scale);
