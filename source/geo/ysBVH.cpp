@@ -241,9 +241,9 @@ struct ysBVHBuilder
         ysAssert(endIdx - beginIdx >= m_delta);
         ys_int32 i = beginIdx;
         ys_int32 k = endIdx;
-        ys_int32 j = (i + k) / 2;
         do
         {
+            ys_int32 j = (i + k) / 2;
             ysAssert(i < j && j < k);
             bool bitL = (m_clusters[j - 1].m_zOrder >> zOrderBitPosition) & 1;
             bool bitR = (m_clusters[j - 0].m_zOrder >> zOrderBitPosition) & 1;
@@ -261,15 +261,11 @@ struct ysBVHBuilder
             {
                 i = j;
             }
-            j = (i + k) / 2;
 
         } while (i + 1 < k);
-        ysAssert(j > i);
+        ysAssert(i + 1 == k);
 
-        bool bitL = (m_clusters[j - 1].m_zOrder >> zOrderBitPosition) & 1;
-        bool bitR = (m_clusters[j - 0].m_zOrder >> zOrderBitPosition) & 1;
-        ysAssert(bitR == true || bitL == false);
-        return (bitL == bitR) ? ys_nullIndex : j;
+        return ys_nullIndex;
     }
 
     //
@@ -510,7 +506,7 @@ struct ysBVHBuilder
                 ysAssert(clusterIdx == ys_nullIndex);
             }
         }
-        ysAssert(agglomeratedList.m_count == agglomeratedClusterCount);
+        ysAssert(agglomeratedList.m_count <= agglomeratedClusterCount);
         return agglomeratedList;
     }
 
