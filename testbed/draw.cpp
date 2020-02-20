@@ -14,6 +14,14 @@ Camera g_camera;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void sBuildWorldMatrix(ys_float32* m, const ysTransform& xf)
+{
+    ysMtx44 worldMtx = ysMtxFromTransform(xf);
+    ysMemCpy(m, &worldMtx, sizeof(ysMtx44));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Camera::Camera()
 {
     m_center = ysVecSet(0.0f, -16.0f, 0.0f);
@@ -560,6 +568,165 @@ struct GLRenderTriangles
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct GLRenderPrimitiveLines
+{
+    void Create()
+    {
+        {
+            char* shaderSourceVS = nullptr;
+            char* shaderSourcePS = nullptr;
+            ys_uint32 lenVS = 0;
+            ys_uint32 lenPS = 0;
+            ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/primEdge_VS.glsl");
+            ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/primEdge_PS.glsl");
+            ysAssert(resVS == 0);
+            ysAssert(resPS == 0);
+            m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
+            ShaderLoader::sUnloadShader(&shaderSourcePS);
+            ShaderLoader::sUnloadShader(&shaderSourceVS);
+        }
+
+        m_projectionUniform = glGetUniformLocation(m_programId, "g_projectionMatrix");
+        m_viewUniform = glGetUniformLocation(m_programId, "g_viewMatrix");
+        m_worldUniform = glGetUniformLocation(m_programId, "cb_worldMatrix");
+        m_colorUniform = glGetUniformLocation(m_programId, "cb_color");
+
+        ysAssert(m_projectionUniform >= 0);
+        ysAssert(m_viewUniform >= 0);
+        ysAssert(m_worldUniform >= 0);
+        ysAssert(m_colorUniform >= 0);
+        m_vertexAttribute = 0;
+
+        // Generate
+        glGenVertexArrays(1, &m_vaoId);
+        glGenBuffers(2, m_vboIds);
+
+        glBindVertexArray(m_vaoId);
+        glEnableVertexAttribArray(m_vertexAttribute);
+
+        // Vertex buffer
+        glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[0]);
+        glVertexAttribPointer(m_vertexAttribute, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+        glBufferData(GL_ARRAY_BUFFER, sizeof(m_vertices), m_vertices, GL_STATIC_DRAW);
+
+        // Index buffer
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vboIds[1]);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(m_indices), m_indices, GL_STATIC_DRAW);
+
+        sCheckGLError();
+
+        // Cleanup
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+        m_count = 0;
+    }
+
+    void Destroy()
+    {
+        if (m_vaoId)
+        {
+            glDeleteVertexArrays(1, &m_vaoId);
+            glDeleteBuffers(2, m_vboIds);
+            m_vaoId = 0;
+        }
+
+        if (m_programId)
+        {
+            glDeleteProgram(m_programId);
+            m_programId = 0;
+        }
+    }
+
+    void PushAABB(const ysAABB& aabb, const ysTransform& xf const Color& c)
+    {
+        if (m_count == e_maxPrimitives)
+        {
+            Flush();
+        }
+        m_primitives[m_count].m_transform = xf;
+        m_primitives[m_count].m_color = c;
+        m_primitives[m_count].m_type = PrimitiveType::e_aabb;
+        m_count++;
+    }
+
+    void Flush()
+    {
+        if (m_count == 0)
+        {
+            return;
+        }
+
+        glUseProgram(m_programId);
+
+        ys_float32 proj[16];
+        ys_float32 view[16];
+        ys_float32 world[16];
+        g_camera.BuildProjectionMatrix(proj);
+        g_camera.BuildViewMatrix(view);
+
+        glUniformMatrix4fv(m_projectionUniform, 1, GL_FALSE, proj);
+        glUniformMatrix4fv(m_viewUniform, 1, GL_FALSE, view);
+
+        for (ys_int32 i = 0; i < m_primitiveCount; ++i)
+        {
+            sBuildWorldMatrix(world, );
+            glUniformMatrix4fv(m_worldUniform, 1, GL_FALSE, world);
+            glUniform4fv(m_colorUniform, 1, )
+        }
+
+        glBindVertexArray(m_vaoId);
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[0]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, m_count * sizeof(Vector3), m_vertices);
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[1]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, m_count * sizeof(Color), m_colors);
+
+        glDrawArrays(GL_LINES, 0, m_count);
+
+        sCheckGLError();
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+        glUseProgram(0);
+
+        m_count = 0;
+    }
+
+    enum { e_vertexCount = 8, e_indexCount = 24 };
+    Vector3 m_vertices[e_vertexCount];
+    ys_uint32 m_indices[e_indexCount];
+
+    enum PrimitiveType
+    {
+        e_aabb
+    };
+
+    enum { e_maxPrimitives = 512 };
+    struct PrimitiveInstance
+    {
+        ysTransform m_transform;
+        Color m_color;
+        PrimitiveType m_type;
+    };
+
+    PrimitiveInstance m_primitives[e_maxPrimitives];
+
+    ys_int32 m_primitiveCount;
+
+    GLuint m_vaoId;
+    GLuint m_vboIds[2];
+    GLuint m_programId;
+    GLint m_projectionUniform;
+    GLint m_viewUniform;
+    GLint m_worldUniform;
+    GLint m_colorUniform;
+    GLint m_vertexAttribute;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 DebugDraw::DebugDraw()
 {
     m_showUI = true;
@@ -568,6 +735,7 @@ DebugDraw::DebugDraw()
 
     m_lines = nullptr;
     m_triangles = nullptr;
+    m_primLines = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -586,6 +754,8 @@ void DebugDraw::Create()
     m_lines->Create();
     m_triangles = ysNew GLRenderTriangles;
     m_triangles->Create();
+    m_primLines = ysNew GLRenderPrimitiveLines;
+    m_primLines->Create();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -599,6 +769,10 @@ void DebugDraw::Destroy()
     m_triangles->Destroy();
     ysDelete(m_triangles);
     m_triangles = nullptr;
+
+    m_primLines->Destroy();
+    ysDelete(m_primLines);
+    m_primLines = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -622,6 +796,12 @@ void DebugDraw::DrawTriangleList(const ysVec4* vertices, const Color* colors, ys
         m_triangles->PushVertex(vertices[3 * i + 1], colors[i]);
         m_triangles->PushVertex(vertices[3 * i + 2], colors[i]);
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void DebugDraw::DrawOBB(const ysAABB& aabb, const ysTransform& xf, const Color& color)
+{
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

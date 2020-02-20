@@ -6,6 +6,7 @@ struct GLFWwindow;
 
 struct GLRenderLines;
 struct GLRenderTriangles;
+struct GLRenderPrimitiveLines;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +44,8 @@ struct DebugDraw : public ysDebugDraw
     virtual void DrawSegmentList(const ysVec4* vertices, const Color* colors, ys_int32 segmentCount) override;
     virtual void DrawTriangleList(const ysVec4* vertices, const Color* colors, ys_int32 triangleCount) override;
 
+    virtual void DrawOBB(const ysAABB&, const ysTransform&, const Color& color) override;
+
     void Flush();
 
     bool m_showUI;
@@ -51,6 +54,8 @@ struct DebugDraw : public ysDebugDraw
 
     GLRenderLines* m_lines;
     GLRenderTriangles* m_triangles;
+
+    GLRenderPrimitiveLines* m_primLines;
 };
 
 extern DebugDraw g_debugDraw;

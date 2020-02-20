@@ -18,6 +18,10 @@ set (TESTBED_RESOURCE_FILES
     shaders/edge_PS.glsl
     shaders/face_VS.glsl
     shaders/face_PS.glsl
+    shaders/primEdge_VS.glsl
+    shaders/primEdge_PS.glsl
+    shaders/primFace_VS.glsl
+    shaders/primFace_PS.glsl
 )
 
 add_executable(testbed ${TESTBED_SOURCE_FILES} ${TESTBED_RESOURCE_FILES})

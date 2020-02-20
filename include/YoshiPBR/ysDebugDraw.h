@@ -2,6 +2,8 @@
 
 #include "YoshiPBR/ysMath.h"
 
+struct ysAABB;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Color
@@ -32,4 +34,6 @@ struct ysDebugDraw
     // color is per primitive (not per vertex) i.e. for triangles you should pass 3x as many vertices as colors
     virtual void DrawSegmentList(const ysVec4* vertices, const Color* colors, ys_int32 segmentCount);
     virtual void DrawTriangleList(const ysVec4* vertices, const Color* colors, ys_int32 triangleCount);
+
+    virtual void DrawOBB(const ysAABB&, const ysTransform&, const Color&);
 };
