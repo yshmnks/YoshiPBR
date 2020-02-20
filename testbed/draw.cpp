@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <fstream>
+#include <algorithm>
 
 #include "glad/glad.h"
 #include "glfw/glfw3.h"
@@ -717,6 +718,7 @@ struct GLRenderPrimitiveLines
         prim->m_scale = spanLS;
         prim->m_color = c;
         prim->m_type = PrimitiveType::e_aabb;
+        prim->m_index = m_primitiveCount;
         m_primitiveCount++;
     }
 
@@ -726,6 +728,7 @@ struct GLRenderPrimitiveLines
         {
             return;
         }
+        std::sort(m_primitives, m_primitives + m_primitiveCount, sComparePrimitiveInstances);
 
         glUseProgram(m_programId);
         {
@@ -765,7 +768,26 @@ struct GLRenderPrimitiveLines
         ysVec4 m_scale;
         Color m_color;
         PrimitiveType m_type;
+
+        // The index of the slot into which this was first pushed. It is a dummy variable to facilitate strict-weak-ordered sorting.
+        ys_int32 m_index;
     };
+
+    static bool sComparePrimitiveInstances(const PrimitiveInstance& a, const PrimitiveInstance& b)
+    {
+        if (a.m_type < b.m_type)
+        {
+            return true;
+        }
+
+        if (a.m_type > b.m_type)
+        {
+            return false;
+        }
+
+        ysAssert(a.m_index != b.m_index);
+        return a.m_index < b.m_index;
+    }
 
     enum { e_maxPrimitives = 512 };
     PrimitiveInstance m_primitives[e_maxPrimitives];
