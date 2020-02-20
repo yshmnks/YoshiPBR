@@ -4,6 +4,8 @@ set (TESTBED_SOURCE_FILES
 	main.cpp
     draw.cpp
     draw.h
+	scenePreview.cpp
+	scenePreview.h
 	imgui_impl_glfw.cpp
 	imgui_impl_glfw.h
 	imgui_impl_opengl3.cpp
@@ -16,6 +18,10 @@ set (TESTBED_RESOURCE_FILES
     shaders/edge_PS.glsl
     shaders/face_VS.glsl
     shaders/face_PS.glsl
+    shaders/primEdge_VS.glsl
+    shaders/primEdge_PS.glsl
+    shaders/primFace_VS.glsl
+    shaders/primFace_PS.glsl
 )
 
 add_executable(testbed ${TESTBED_SOURCE_FILES} ${TESTBED_RESOURCE_FILES})

@@ -43,6 +43,7 @@ extern const ysVec4 ysVec4_zero;
 extern const ysVec4 ysVec4_half;
 extern const ysVec4 ysVec4_one;
 extern const ysVec4 ysVec4_two;
+extern const ysVec4 ysVec4_maxFloat;
 extern const ysVec4 ysVec4_unitX;
 extern const ysVec4 ysVec4_unitY;
 extern const ysVec4 ysVec4_unitZ;
@@ -68,6 +69,34 @@ ysVec4 ysSplatX(const ysVec4&);
 ysVec4 ysSplatY(const ysVec4&);
 ysVec4 ysSplatZ(const ysVec4&);
 ysVec4 ysSplatW(const ysVec4&);
+
+template <typename T>
+void ysSwap(T& a, T& b)
+{
+    T tmp = a;
+    a = b;
+    b = tmp;
+}
+template <typename T>
+T ysMin(const T& a, const T& b)
+{
+    return (a < b) ? a : b;
+}
+template <typename T>
+T ysMax(const T& a, const T& b)
+{
+    return (a > b) ? a : b;
+}
+ysVec4 ysMin(const ysVec4&, const ysVec4&);
+ysVec4 ysMax(const ysVec4&, const ysVec4&);
+ysVec4 ysClamp(const ysVec4& unclamped, const ysVec4& min, const ysVec4& max);
+ysVec4 ysAbs(const ysVec4&);
+
+bool ysAllLT3(const ysVec4&, const ysVec4&);
+bool ysAllLE3(const ysVec4&, const ysVec4&);
+bool ysAllEQ3(const ysVec4&, const ysVec4&);
+bool ysAllGE3(const ysVec4&, const ysVec4&);
+bool ysAllGT3(const ysVec4&, const ysVec4&);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Operator overloads
@@ -108,3 +137,8 @@ ysVec4 ysRotate(const ysVec4& q, const ysVec4& v);
 
 ysVec4 ysMulQQ(const ysVec4& q2, const ysVec4& q1);
 ysTransform ysMul(const ysTransform& xf2, const ysTransform& xf1);
+ysVec4 ysMul(const ysTransform& xf, const ysVec4& p);
+
+ysVec4 ysRandom3(const ysVec4& min, const ysVec4& max);
+ysVec4 ysRandomDir();
+ysVec4 ysRandomQuat();

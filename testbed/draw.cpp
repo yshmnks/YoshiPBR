@@ -7,10 +7,23 @@
 #include "glfw/glfw3.h"
 #include "imgui/imgui.h"
 
+#include "YoshiPBR/ysAABB.h"
+
 #define BUFFER_OFFSET(x)  ((const void*) (x))
 
 DebugDraw g_debugDraw;
 Camera g_camera;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void sBuildWorldMatrix(ys_float32* m, const ysTransform& xf, const ysVec4& scale)
+{
+    ysMtx44 worldMtx = ysMtxFromTransform(xf);
+    worldMtx.cx = worldMtx.cx * ysSplatX(scale);
+    worldMtx.cy = worldMtx.cy * ysSplatY(scale);
+    worldMtx.cz = worldMtx.cz * ysSplatZ(scale);
+    ysMemCpy(m, &worldMtx, sizeof(ysMtx44));
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -263,6 +276,13 @@ struct ShaderLoader
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Vector3
 {
+    void Set(ys_float32 xIn, ys_float32 yIn, ys_float32 zIn)
+    {
+        x = xIn;
+        y = yIn;
+        z = zIn;
+    }
+
     ys_float32 x, y, z;
 };
 
@@ -560,11 +580,231 @@ struct GLRenderTriangles
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct GLRenderPrimitiveLines
+{
+    void Create()
+    {
+        // Initialize transient CPU data
+        ys_int32 vertexCount = 8;
+        ys_int32 indexCount = 24;
+        Vector3* vertices = static_cast<Vector3*>(ysMalloc(sizeof(Vector3) * vertexCount));
+        ys_uint32* indices = static_cast<ys_uint32*>(ysMalloc(sizeof(ys_uint32) * indexCount));
+        {
+            // AABB
+            {
+                primitiveIndexStart[PrimitiveType::e_aabb] = 0;
+                primitiveIndexCount[PrimitiveType::e_aabb] = 24;
+
+                vertices[0].Set(-1.0f, -1.0f, -1.0f);
+                vertices[1].Set(1.0f, -1.0f, -1.0f);
+                vertices[2].Set(1.0f, 1.0f, -1.0f);
+                vertices[3].Set(-1.0f, 1.0f, -1.0f);
+                vertices[4].Set(-1.0f, -1.0f, 1.0f);
+                vertices[5].Set(1.0f, -1.0f, 1.0f);
+                vertices[6].Set(1.0f, 1.0f, 1.0f);
+                vertices[7].Set(-1.0f, 1.0f, 1.0f);
+
+                indices[0] = 0;
+                indices[1] = 1;
+                indices[2] = 1;
+                indices[3] = 2;
+                indices[4] = 2;
+                indices[5] = 3;
+                indices[6] = 3;
+                indices[7] = 0;
+
+                indices[8] = 4;
+                indices[9] = 5;
+                indices[10] = 5;
+                indices[11] = 6;
+                indices[12] = 6;
+                indices[13] = 7;
+                indices[14] = 7;
+                indices[15] = 4;
+
+                indices[16] = 0;
+                indices[17] = 4;
+                indices[18] = 1;
+                indices[19] = 5;
+                indices[20] = 2;
+                indices[21] = 6;
+                indices[22] = 3;
+                indices[23] = 7;
+            }
+
+            {
+                char* shaderSourceVS = nullptr;
+                char* shaderSourcePS = nullptr;
+                ys_uint32 lenVS = 0;
+                ys_uint32 lenPS = 0;
+                ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/primEdge_VS.glsl");
+                ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/primEdge_PS.glsl");
+                ysAssert(resVS == 0);
+                ysAssert(resPS == 0);
+                m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
+                ShaderLoader::sUnloadShader(&shaderSourcePS);
+                ShaderLoader::sUnloadShader(&shaderSourceVS);
+            }
+
+            m_projectionUniform = glGetUniformLocation(m_programId, "g_projectionMatrix");
+            m_viewUniform = glGetUniformLocation(m_programId, "g_viewMatrix");
+            m_worldUniform = glGetUniformLocation(m_programId, "cb_worldMatrix");
+            m_colorUniform = glGetUniformLocation(m_programId, "cb_color");
+
+            ysAssert(m_projectionUniform >= 0);
+            ysAssert(m_viewUniform >= 0);
+            ysAssert(m_worldUniform >= 0);
+            ysAssert(m_colorUniform >= 0);
+            m_vertexAttribute = 0;
+
+            // Generate
+            glGenVertexArrays(1, &m_vaoId);
+            glGenBuffers(2, m_vboIds);
+
+            glBindVertexArray(m_vaoId);
+            glEnableVertexAttribArray(m_vertexAttribute);
+
+            // Vertex buffer
+            glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[0]);
+            glVertexAttribPointer(m_vertexAttribute, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+            glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3) * vertexCount, vertices, GL_STATIC_DRAW);
+
+            // Index buffer
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vboIds[1]);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ys_uint32) * indexCount, indices, GL_STATIC_DRAW);
+
+            sCheckGLError();
+
+            // Cleanup
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+        }
+        // Data has been funneled to the GPU. We no longer need the CPU version.
+        ysFree(vertices);
+        ysFree(indices);
+
+        m_primitiveCount = 0;
+    }
+
+    void Destroy()
+    {
+        if (m_vaoId)
+        {
+            glDeleteVertexArrays(1, &m_vaoId);
+            glDeleteBuffers(2, m_vboIds);
+            m_vaoId = 0;
+        }
+
+        if (m_programId)
+        {
+            glDeleteProgram(m_programId);
+            m_programId = 0;
+        }
+    }
+
+    void PushAABB(const ysAABB& aabb, const ysTransform& xf, const Color& c)
+    {
+        if (m_primitiveCount == e_maxPrimitives)
+        {
+            Flush();
+        }
+        ysVec4 centerLS = (aabb.m_min + aabb.m_max) * ysVec4_half;
+        ysVec4 spanLS = (aabb.m_max - aabb.m_min) * ysVec4_half;
+        PrimitiveInstance* prim = m_primitives + m_primitiveCount;
+        prim->m_transform.p = ysMul(xf, centerLS);
+        prim->m_transform.q = xf.q;
+        prim->m_scale = spanLS;
+        prim->m_color = c;
+        prim->m_type = PrimitiveType::e_aabb;
+        m_primitiveCount++;
+    }
+
+    void Flush()
+    {
+        if (m_primitiveCount == 0)
+        {
+            return;
+        }
+
+        glUseProgram(m_programId);
+        {
+            ys_float32 proj[16];
+            ys_float32 view[16];
+            g_camera.BuildProjectionMatrix(proj);
+            g_camera.BuildViewMatrix(view);
+            glUniformMatrix4fv(m_projectionUniform, 1, GL_FALSE, proj);
+            glUniformMatrix4fv(m_viewUniform, 1, GL_FALSE, view);
+
+            glBindVertexArray(m_vaoId);
+            {
+                glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[1]);
+                {
+                    for (ys_int32 i = 0; i < m_primitiveCount; ++i)
+                    {
+                        const PrimitiveInstance* primitive = m_primitives + i;
+                        ys_float32 world[16];
+                        sBuildWorldMatrix(world, primitive->m_transform, primitive->m_scale);
+                        glUniformMatrix4fv(m_worldUniform, 1, GL_FALSE, world);
+                        glUniform4fv(m_colorUniform, 1, &primitive->m_color.r);
+                        ys_int32 indexByteOffset = sizeof(ys_uint32) * primitiveIndexStart[primitive->m_type];
+                        void* indexMemOffset = reinterpret_cast<void*>(indexByteOffset);
+                        glDrawElements(GL_LINES, primitiveIndexCount[primitive->m_type], GL_UNSIGNED_INT, indexMemOffset);
+                        sCheckGLError();
+                    }
+                }
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+            }
+            glBindVertexArray(0);
+        }
+        glUseProgram(0);
+
+        m_primitiveCount = 0;
+    }
+
+    enum PrimitiveType
+    {
+        e_aabb = 0,
+        e_primitiveTypeCount = 1
+    };
+
+    struct PrimitiveInstance
+    {
+        ysTransform m_transform;
+        ysVec4 m_scale;
+        Color m_color;
+        PrimitiveType m_type;
+    };
+
+    ys_int32 primitiveIndexStart[PrimitiveType::e_primitiveTypeCount];
+    ys_int32 primitiveIndexCount[PrimitiveType::e_primitiveTypeCount];
+
+    enum { e_maxPrimitives = 512 };
+    PrimitiveInstance m_primitives[e_maxPrimitives];
+
+    ys_int32 m_primitiveCount;
+
+    GLuint m_vaoId;
+    GLuint m_vboIds[2];
+    GLuint m_programId;
+    GLint m_projectionUniform;
+    GLint m_viewUniform;
+    GLint m_worldUniform;
+    GLint m_colorUniform;
+    GLint m_vertexAttribute;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 DebugDraw::DebugDraw()
 {
     m_showUI = true;
+    m_drawBVH = true;
+    m_drawGeo = true;
+    m_drawBVHDepth = -1;
+
     m_lines = nullptr;
     m_triangles = nullptr;
+    m_primLines = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -579,10 +819,12 @@ DebugDraw::~DebugDraw()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void DebugDraw::Create()
 {
-    m_lines = ysNew GLRenderLines;
+    m_lines = static_cast<GLRenderLines*>(ysMalloc(sizeof(GLRenderLines)));
     m_lines->Create();
-    m_triangles = ysNew GLRenderTriangles;
+    m_triangles = static_cast<GLRenderTriangles*>(ysMalloc(sizeof(GLRenderTriangles)));
     m_triangles->Create();
+    m_primLines = static_cast<GLRenderPrimitiveLines*>(ysMalloc(sizeof(GLRenderPrimitiveLines)));
+    m_primLines->Create();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -590,12 +832,16 @@ void DebugDraw::Create()
 void DebugDraw::Destroy()
 {
     m_lines->Destroy();
-    ysDelete(m_lines);
+    ysFree(m_lines);
     m_lines = nullptr;
 
     m_triangles->Destroy();
-    ysDelete(m_triangles);
+    ysFree(m_triangles);
     m_triangles = nullptr;
+
+    m_primLines->Destroy();
+    ysFree(m_primLines);
+    m_primLines = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -623,8 +869,16 @@ void DebugDraw::DrawTriangleList(const ysVec4* vertices, const Color* colors, ys
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void DebugDraw::DrawOBB(const ysAABB& aabb, const ysTransform& xf, const Color& color)
+{
+    m_primLines->PushAABB(aabb, xf, color);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void DebugDraw::Flush()
 {
     m_triangles->Flush();
     m_lines->Flush();
+    m_primLines->Flush();
 }

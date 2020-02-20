@@ -1,4 +1,4 @@
-#include "YoshiPBR/ysTypes.h"
+#include "YoshiPBR/YoshiPBR.h"
 
 #include "draw.h"
 
@@ -12,6 +12,7 @@
 #include <stdio.h>
 
 GLFWwindow* g_mainWindow = nullptr;
+static ysScene* s_scene = nullptr;
 static bool s_rightMouseDown = false;
 static ys_float32 s_uiScale = 1.0f;
 static ys_float32 s_mouseX = 0.0f;
@@ -56,6 +57,15 @@ static void sCreateUI(GLFWwindow* window, const char* glslVersion = nullptr)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void sDestroyUI()
+{
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 {
     int menuWidth = 256;
@@ -69,6 +79,12 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
             if (ImGui::BeginTabItem("Controls"))
             {
                 ImGui::SliderAngle("FoV", &g_camera.m_verticalFov, 1.0f , 89.0f, "%.0f degrees");
+                ImGui::Separator();
+
+                ImGui::Checkbox("Draw Geo", &g_debugDraw.m_drawGeo);
+                ImGui::Checkbox("Draw BVH", &g_debugDraw.m_drawBVH);
+                ImGui::SameLine();
+                ImGui::SliderInt("Depth", &g_debugDraw.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
                 ImGui::Separator();
 
                 ImVec2 button_sz = ImVec2(-1, 0);
@@ -224,6 +240,55 @@ static void sUpdateCamera(ys_float32 moveDistance)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void sCreateScene()
+{
+    const ys_int32 n = 16;
+    ysInputTriangle triangles[n][n][n];
+    for (ys_int32 i = 0; i < n; ++i)
+    {
+        for (ys_int32 j = 0; j < n; ++j)
+        {
+            for (ys_int32 k = 0; k < n; ++k)
+            {
+                ysInputTriangle* triangle = &triangles[i][j][k];
+                triangle->vertices[0] = ysVecSet(-0.25f, -0.25f, -0.25f);
+                triangle->vertices[1] = ysVecSet(0.25f, -0.25f, -0.25f);
+                triangle->vertices[2] = ysVecSet(0.25f, 0.25f, 0.25f);
+#if 0
+                ysVec4 asdf = ysVecSet(ys_float32(i), ys_float32(j), ys_float32(k)) * ysSplat(1.0f);
+                triangle->vertices[0] = triangle->vertices[0] + asdf;
+                triangle->vertices[1] = triangle->vertices[1] + asdf;
+                triangle->vertices[2] = triangle->vertices[2] + asdf;
+#else
+                ysTransform xf;
+                xf.q = ysRandomQuat();
+                xf.p = ysRandom3(ysVec4_zero, ysSplat(ys_float32(n)) * ysVecSet(1.0f, 2.0f, 4.0f));
+                ysVec4 scale = ysRandom3(ysSplat(0.25f), ysSplat(4.0f));
+                triangle->vertices[0] = ysMul(xf, triangle->vertices[0] * scale);
+                triangle->vertices[1] = ysMul(xf, triangle->vertices[1] * scale);
+                triangle->vertices[2] = ysMul(xf, triangle->vertices[2] * scale);
+#endif
+            }
+        }
+    }
+
+    ysSceneDef sceneDef;
+    sceneDef.m_triangles = &triangles[0][0][0];
+    sceneDef.m_triangleCount = n * n * n;
+
+    s_scene = ysScene_Create(&sceneDef);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void sDestroyScene()
+{
+    ysScene_Destroy(s_scene);
+    s_scene = nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int main(int, char**)
 {
     // Enable memory-leak reports
@@ -280,6 +345,8 @@ int main(int, char**)
     ys_float64 time1 = glfwGetTime();
     ys_float64 frameTime = 0.0;
 
+    sCreateScene();
+
     while (!glfwWindowShouldClose(g_mainWindow))
     {
         glfwGetWindowSize(g_mainWindow, &windowWidth, &windowHeight);
@@ -306,52 +373,22 @@ int main(int, char**)
 
         sUpdateCamera(0.1f);
 
+        if (g_debugDraw.m_drawBVH)
         {
-            {
-                ysVec4 a = ysVecSet(1.0f, 0.0f, 0.0f);
-                ysVec4 b = ysVecSet(0.0f, 1.0f, 0.0f);
-                ysVec4 c = ysVecSet(0.0f, 0.0f, 1.0f);
-                ysVec4 d = ysVecSet(0.0f, 0.0f, 0.0f);
-                ysVec4 asdf[12] =
-                {
-                    d, c, b,
-                    d, a, c,
-                    d, b, a,
-                    a, b, c
-                };
-                Color qwer[4];
-                qwer[0] = Color(1.0f, 0.0f, 0.0f);
-                qwer[1] = Color(0.0f, 1.0f, 0.0f);
-                qwer[2] = Color(0.0f, 0.0f, 1.0f);
-                qwer[3] = Color(1.0f, 1.0f, 1.0f);
-                g_debugDraw.DrawTriangleList(asdf, qwer, 4);
-            }
-            {
-                ys_float32 k = 0.1f;
-                ysVec4 a = ysVecSet(1.0f + 2.0f * k, -k, -k);
-                ysVec4 b = ysVecSet(-k, 1.0f + 2.0f * k, -k);
-                ysVec4 c = ysVecSet(-k, -k, 1.0f + 2.0f * k);
-                ysVec4 d = ysVecSet(-k, -k, -k);
-                ysVec4 asdf[12] =
-                {
-                    d, a,
-                    d, b,
-                    d, c,
-                    a, b,
-                    b, c,
-                    c, a
-                };
-                Color qwer[6];
-                qwer[0] = Color(1.0f, 0.0f, 1.0f);
-                qwer[1] = Color(1.0f, 0.0f, 1.0f);
-                qwer[2] = Color(1.0f, 0.0f, 1.0f);
-                qwer[3] = Color(1.0f, 0.0f, 1.0f);
-                qwer[4] = Color(1.0f, 0.0f, 1.0f);
-                qwer[5] = Color(1.0f, 0.0f, 1.0f);
-                g_debugDraw.DrawSegmentList(asdf, qwer, 6);
-            }
-            g_debugDraw.Flush();
+            ysDrawInputBVH input;
+            input.debugDraw = &g_debugDraw;
+            input.depth = g_debugDraw.m_drawBVHDepth;
+            ysScene_DebugDrawBVH(s_scene, &input);
         }
+
+        if (g_debugDraw.m_drawGeo)
+        {
+            ysDrawInputGeo input;
+            input.debugDraw = &g_debugDraw;
+            ysScene_DebugDrawGeo(s_scene, &input);
+        }
+
+        g_debugDraw.Flush();
 
         sUpdateUI(windowWidth, windowHeight);
 
@@ -370,9 +407,10 @@ int main(int, char**)
         time1 = time2;
     }
 
+    sDestroyScene();
+
     g_debugDraw.Destroy();
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
+    sDestroyUI();
     glfwTerminate();
     return 0;
 }
