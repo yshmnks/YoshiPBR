@@ -51,6 +51,7 @@ struct DebugDraw : public ysDebugDraw
     bool m_showUI;
     bool m_drawBVH;
     bool m_drawGeo;
+    ys_int32 m_drawBVHDepth;
 
     GLRenderLines* m_lines;
     GLRenderTriangles* m_triangles;

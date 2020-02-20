@@ -137,3 +137,4 @@ ysVec4 ysRotate(const ysVec4& q, const ysVec4& v);
 
 ysVec4 ysMulQQ(const ysVec4& q2, const ysVec4& q1);
 ysTransform ysMul(const ysTransform& xf2, const ysTransform& xf1);
+ysVec4 ysMul(const ysTransform& xf, const ysVec4& p);

@@ -39,12 +39,12 @@ struct ysDrawInputBVH
     ysDrawInputBVH()
     {
         debugDraw = nullptr;
-        depth = ys_nullIndex;
+        depth = -1;
     }
 
     ysDebugDraw* debugDraw;
 
-    // If null, all nodes will be drawn. (depth=0 at the root and increases descending into the children)
+    // If negative, all nodes will be drawn. (depth=0 at the root and increases descending into the children)
     ys_int32 depth;
 };
 

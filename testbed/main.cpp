@@ -83,6 +83,8 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 
                 ImGui::Checkbox("Draw Geo", &g_debugDraw.m_drawGeo);
                 ImGui::Checkbox("Draw BVH", &g_debugDraw.m_drawBVH);
+                ImGui::SameLine();
+                ImGui::SliderInt("Depth", &g_debugDraw.m_drawBVHDepth, -1, 100);
                 ImGui::Separator();
 
                 ImVec2 button_sz = ImVec2(-1, 0);
@@ -365,6 +367,7 @@ int main(int, char**)
         {
             ysDrawInputBVH input;
             input.debugDraw = &g_debugDraw;
+            input.depth = g_debugDraw.m_drawBVHDepth;
             ysScene_DebugDrawBVH(s_scene, &input);
         }
 

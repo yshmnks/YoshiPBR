@@ -564,50 +564,44 @@ void ysBVH::Destroy()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
 {
-    ysVec4 verts[12][2];
-    Color colors[12];
-    for (ys_int32 i = 0; i < 12; ++i)
+    Color color = Color(1.0f, 1.0f, 1.0f, 1.0f);
+
+    if (input->depth < 0)
     {
-        colors[i] = Color(1.0f, 1.0f, 1.0f);
+        for (ys_int32 i = 0; i < m_nodeCount; ++i)
+        {
+            input->debugDraw->DrawOBB(m_nodes[i].m_aabb, ysTransform_identity, color);
+        }
+        return;
     }
 
-    for (ys_int32 i = 0; i < m_nodeCount; ++i)
+    const ys_int32 k_stackSize = 256;
+    ysAssert(input->depth < k_stackSize);
+    ys_int32 nodeIndexStack[k_stackSize];
+    ys_int32 nodeDepthStack[k_stackSize];
+    nodeIndexStack[0] = 0;
+    nodeDepthStack[0] = 0;
+    ys_int32 stackCount = 1;
+    while (stackCount > 0)
     {
-        const Node* node = m_nodes + i;
-        const ysAABB& aabb = node->m_aabb;
-        ysVec4 corners[2][2][2];
-        corners[0][0][0] = aabb.m_min;
-        corners[0][0][1] = ysVecSet(aabb.m_min.x, aabb.m_min.y, aabb.m_max.z);
-        corners[0][1][0] = ysVecSet(aabb.m_min.x, aabb.m_max.y, aabb.m_min.z);
-        corners[0][1][1] = ysVecSet(aabb.m_min.x, aabb.m_max.y, aabb.m_max.z);
-        corners[1][0][0] = ysVecSet(aabb.m_max.x, aabb.m_min.y, aabb.m_min.z);
-        corners[1][0][1] = ysVecSet(aabb.m_max.x, aabb.m_min.y, aabb.m_max.z);
-        corners[1][1][0] = ysVecSet(aabb.m_max.x, aabb.m_max.y, aabb.m_min.z);
-        corners[1][1][1] = aabb.m_max;
-        verts[0][0] = corners[0][0][0];
-        verts[0][1] = corners[1][0][0];
-        verts[1][0] = corners[1][0][0];
-        verts[1][1] = corners[1][1][0];
-        verts[2][0] = corners[1][1][0];
-        verts[2][1] = corners[0][1][0];
-        verts[3][0] = corners[0][1][0];
-        verts[3][1] = corners[0][0][0];
-        verts[4][0] = corners[0][0][1];
-        verts[4][1] = corners[1][0][1];
-        verts[5][0] = corners[1][0][1];
-        verts[5][1] = corners[1][1][1];
-        verts[6][0] = corners[1][1][1];
-        verts[6][1] = corners[0][1][1];
-        verts[7][0] = corners[0][1][1];
-        verts[7][1] = corners[0][0][1];
-        verts[8][0] = corners[0][0][0];
-        verts[8][1] = corners[0][0][1];
-        verts[9][0] = corners[1][0][0];
-        verts[9][1] = corners[1][0][1];
-        verts[10][0] = corners[1][1][0];
-        verts[10][1] = corners[1][1][1];
-        verts[11][0] = corners[0][1][0];
-        verts[11][1] = corners[0][1][1];
-        input->debugDraw->DrawSegmentList(&verts[0][0], colors, 12);
+        stackCount--;
+        const Node* node = m_nodes + nodeIndexStack[stackCount];
+        ys_int32 depth = nodeDepthStack[stackCount];
+        if (depth == input->depth)
+        {
+            input->debugDraw->DrawOBB(node->m_aabb, ysTransform_identity, color);
+            continue;
+        }
+        ysAssert(depth < input->depth);
+        ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
+        if (node->m_left != ys_nullIndex)
+        {
+            nodeIndexStack[stackCount] = node->m_left;
+            nodeDepthStack[stackCount] = depth + 1;
+            stackCount++;
+            nodeIndexStack[stackCount] = node->m_right;
+            nodeDepthStack[stackCount] = depth + 1;
+            stackCount++;
+        }
     }
 }
