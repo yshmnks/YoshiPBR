@@ -115,7 +115,14 @@ struct ysBVHBuilder
         m_leafCount = leafCount;
         m_clusterCapacity = 2 * leafCount - 1;
         m_nodeCount = leafCount;
-        m_clusters = static_cast<Cluster*>(ysMalloc(sizeof(Cluster) * m_clusterCapacity));
+
+        // Single allocation for clusters and finalization stack
+        ys_int32 clustersByteCount = sizeof(Cluster) * m_clusterCapacity;
+        ys_int32 stackByteCount = sizeof(ys_int32) * m_clusterCapacity;
+        ys_int32 memBufferByteCount = clustersByteCount + stackByteCount;
+        void* memBuffer = ysMalloc(memBufferByteCount);
+        m_clusters = static_cast<Cluster*>(memBuffer);
+        ys_int32* clusterIdxStack = (ys_int32*)(static_cast<ys_int8*>(memBuffer) + clustersByteCount);
 
         ysAABB centersAABB;
         centersAABB.SetInvalid();
@@ -185,7 +192,6 @@ struct ysBVHBuilder
         }
         output->m_depth = 0;
 
-        ys_int32* clusterIdxStack = static_cast<ys_int32*>(ysMalloc((sizeof(ys_int32) * m_clusterCapacity)));
         ys_int32 clusterIdxStackCount = 1;
         clusterIdxStack[0] = clusterList.m_first;
         m_clusters[clusterList.m_first].m_depth = 0;
@@ -226,8 +232,7 @@ struct ysBVHBuilder
             ysAssert((dst->m_left == ys_nullIndex) == (dst->m_right == ys_nullIndex));
         }
 
-        ysFree(clusterIdxStack);
-        ysFree(m_clusters);
+        ysFree(memBuffer);
     }
 
     //

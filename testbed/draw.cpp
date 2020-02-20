@@ -832,15 +832,15 @@ void DebugDraw::Create()
 void DebugDraw::Destroy()
 {
     m_lines->Destroy();
-    ysDelete(m_lines);
+    ysFree(m_lines);
     m_lines = nullptr;
 
     m_triangles->Destroy();
-    ysDelete(m_triangles);
+    ysFree(m_triangles);
     m_triangles = nullptr;
 
     m_primLines->Destroy();
-    ysDelete(m_primLines);
+    ysFree(m_primLines);
     m_primLines = nullptr;
 }
 
