@@ -5,6 +5,8 @@
 
 struct ysDrawInputGeo;
 struct ysSceneDef;
+struct ysSceneRenderInput;
+struct ysSceneRenderOutput;
 struct ysShape;
 struct ysTriangle;
 
@@ -15,6 +17,8 @@ struct ysScene
     void Reset();
     void Create(const ysSceneDef*);
     void Destroy();
+
+    void Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const;
 
     void DebugDrawGeo(const ysDrawInputGeo*) const;
 
