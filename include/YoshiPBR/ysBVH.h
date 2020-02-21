@@ -1,7 +1,7 @@
 #pragma once
 
 #include "YoshiPBR/ysAABB.h"
-#include "YoshiPBR/ysShape.h"
+#include "YoshiPBR/ysStructures.h"
 
 struct ysDrawInputBVH;
 

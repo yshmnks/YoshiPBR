@@ -1,5 +1,6 @@
 #include "YoshiPBR/ysScene.h"
 #include "YoshiPBR/ysDebugDraw.h"
+#include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
 #include "YoshiPBR/ysTriangle.h"
 
