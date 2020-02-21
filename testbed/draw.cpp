@@ -8,8 +8,6 @@
 #include "glfw/glfw3.h"
 #include "imgui/imgui.h"
 
-#include "YoshiPBR/ysAABB.h"
-
 #define BUFFER_OFFSET(x)  ((const void*) (x))
 
 DebugDraw g_debugDraw;
@@ -644,7 +642,7 @@ struct GLRenderPrimitiveLines
 
         // Populate vertex/index buffers per primitive type
         {
-            glBindVertexArray(m_vaoIds[PrimitiveType::e_aabb]);
+            glBindVertexArray(m_vaoIds[PrimitiveType::e_box]);
             {
                 // Vertex buffer
                 Vector3 vertices[8];
@@ -656,7 +654,7 @@ struct GLRenderPrimitiveLines
                 vertices[5].Set(1.0f, -1.0f, 1.0f);
                 vertices[6].Set(1.0f, 1.0f, 1.0f);
                 vertices[7].Set(-1.0f, 1.0f, 1.0f);
-                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_primVertices[PrimitiveType::e_aabb]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_primVertices[PrimitiveType::e_box]);
                 glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
                 // Index buffer
@@ -685,9 +683,58 @@ struct GLRenderPrimitiveLines
                 indices[10][1] = 6;
                 indices[11][0] = 3;
                 indices[11][1] = 7;
-                primitiveIndexCount[PrimitiveType::e_aabb] = 24;
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vbos.m_primIndices[PrimitiveType::e_aabb]);
+                primitiveIndexCount[PrimitiveType::e_box] = 24;
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vbos.m_primIndices[PrimitiveType::e_box]);
                 glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), &indices[0][0], GL_STATIC_DRAW);
+            }
+
+            glBindVertexArray(m_vaoIds[PrimitiveType::e_ellipsoid]);
+            {
+                const ys_int32 quarterCirclePointCount = 64;
+                const ys_int32 circlePointCount = 4 * quarterCirclePointCount;
+
+                // Vertex buffer
+                Vector3 vertices[3][circlePointCount];
+                for (ys_int32 i = 0; i < quarterCirclePointCount; ++i)
+                {
+                    ys_float32 angle = (ys_pi * 0.5f) * (ys_float32(i) / quarterCirclePointCount);
+                    ys_float32 c = cosf(angle);
+                    ys_float32 s = sinf(angle);
+
+                    vertices[0][quarterCirclePointCount * 0 + i].Set(c, s, 0.0f);
+                    vertices[0][quarterCirclePointCount * 1 + i].Set(-s, c, 0.0f);
+                    vertices[0][quarterCirclePointCount * 2 + i].Set(-c, -s, 0.0f);
+                    vertices[0][quarterCirclePointCount * 3 + i].Set(s, -c, 0.0f);
+
+                    vertices[1][quarterCirclePointCount * 0 + i].Set(0.0f, c, s);
+                    vertices[1][quarterCirclePointCount * 1 + i].Set(0.0f, -s, c);
+                    vertices[1][quarterCirclePointCount * 2 + i].Set(0.0f, -c, -s);
+                    vertices[1][quarterCirclePointCount * 3 + i].Set(0.0f, s, -c);
+
+                    vertices[2][quarterCirclePointCount * 0 + i].Set(s, 0.0f, c);
+                    vertices[2][quarterCirclePointCount * 1 + i].Set(c, 0.0f, -s);
+                    vertices[2][quarterCirclePointCount * 2 + i].Set(-s, 0.0f, -c);
+                    vertices[2][quarterCirclePointCount * 3 + i].Set(-c, 0.0f, s);
+                }
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_primVertices[PrimitiveType::e_ellipsoid]);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices[0][0], GL_STATIC_DRAW);
+
+                // Index buffer
+                ys_uint32 indices[3][circlePointCount][2];
+                for (ys_int32 i = 0; i < circlePointCount; ++i)
+                {
+                    indices[0][i][0] = (i + 0) % circlePointCount;
+                    indices[0][i][1] = (i + 1) % circlePointCount;
+
+                    indices[1][i][0] = indices[0][i][0] + circlePointCount;
+                    indices[1][i][1] = indices[0][i][1] + circlePointCount;
+
+                    indices[2][i][0] = indices[1][i][0] + circlePointCount;
+                    indices[2][i][1] = indices[1][i][1] + circlePointCount;
+                }
+                primitiveIndexCount[PrimitiveType::e_ellipsoid] = 6 * circlePointCount;
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vbos.m_primIndices[PrimitiveType::e_ellipsoid]);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), &indices[0][0][0], GL_STATIC_DRAW);
             }
         }
 
@@ -723,20 +770,32 @@ struct GLRenderPrimitiveLines
         }
     }
 
-    void PushAABB(const ysAABB& aabb, const ysTransform& xf, const Color& c)
+    void PushBox(ysVec4 halfDimensions, const ysTransform& xf, const Color& c)
     {
         if (m_primitiveCount == e_primitiveCapacity)
         {
             Flush();
         }
-        ysVec4 centerLS = (aabb.m_min + aabb.m_max) * ysVec4_half;
-        ysVec4 spanLS = (aabb.m_max - aabb.m_min) * ysVec4_half;
         PrimitiveInstance* prim = m_primitives + m_primitiveCount;
-        prim->m_transform.p = ysMul(xf, centerLS);
-        prim->m_transform.q = xf.q;
-        prim->m_scale = spanLS;
+        prim->m_transform = xf;
+        prim->m_scale = halfDimensions;
         prim->m_color = c;
-        prim->m_type = PrimitiveType::e_aabb;
+        prim->m_type = PrimitiveType::e_box;
+        prim->m_index = m_primitiveCount;
+        m_primitiveCount++;
+    }
+
+    void PushEllipsoid(ysVec4 halfDimensions, const ysTransform& xf, const Color& c)
+    {
+        if (m_primitiveCount == e_primitiveCapacity)
+        {
+            Flush();
+        }
+        PrimitiveInstance* prim = m_primitives + m_primitiveCount;
+        prim->m_transform = xf;
+        prim->m_scale = halfDimensions;
+        prim->m_color = c;
+        prim->m_type = PrimitiveType::e_ellipsoid;
         prim->m_index = m_primitiveCount;
         m_primitiveCount++;
     }
@@ -810,8 +869,9 @@ struct GLRenderPrimitiveLines
     enum PrimitiveType
     {
         e_unknown = -1,
-        e_aabb = 0,
-        e_primitiveTypeCount = 1
+        e_box = 0,
+        e_ellipsoid = 1,
+        e_primitiveTypeCount = 2
     };
 
     struct PrimitiveInstance
@@ -946,9 +1006,16 @@ void DebugDraw::DrawTriangleList(const ysVec4* vertices, const Color* colors, ys
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void DebugDraw::DrawOBB(const ysAABB& aabb, const ysTransform& xf, const Color& color)
+void DebugDraw::DrawWireBox(const ysVec4& halfDimensions, const ysTransform& xf, const Color& color)
 {
-    m_primLines->PushAABB(aabb, xf, color);
+    m_primLines->PushBox(halfDimensions, xf, color);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void DebugDraw::DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransform& xf, const Color& color)
+{
+    m_primLines->PushEllipsoid(halfDimensions, xf, color);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

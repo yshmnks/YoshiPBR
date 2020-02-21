@@ -44,7 +44,8 @@ struct DebugDraw : public ysDebugDraw
     virtual void DrawSegmentList(const ysVec4* vertices, const Color* colors, ys_int32 segmentCount) override;
     virtual void DrawTriangleList(const ysVec4* vertices, const Color* colors, ys_int32 triangleCount) override;
 
-    virtual void DrawOBB(const ysAABB&, const ysTransform&, const Color& color) override;
+    virtual void DrawWireBox(const ysVec4& halfDimensions , const ysTransform&, const Color& color) override;
+    virtual void DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&) override;
 
     void Flush();
 
