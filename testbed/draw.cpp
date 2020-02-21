@@ -17,17 +17,6 @@ Camera g_camera;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void sBuildWorldMatrix(ys_float32* m, const ysTransform& xf, const ysVec4& scale)
-{
-    ysMtx44 worldMtx = ysMtxFromTransform(xf);
-    worldMtx.cx = worldMtx.cx * ysSplatX(scale);
-    worldMtx.cy = worldMtx.cy * ysSplatY(scale);
-    worldMtx.cz = worldMtx.cz * ysSplatZ(scale);
-    ysMemCpy(m, &worldMtx, sizeof(ysMtx44));
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Camera::Camera()
 {
     m_center = ysVecSet(0.0f, -16.0f, 0.0f);
@@ -611,8 +600,7 @@ struct GLRenderPrimitiveLines
         // Generate and specify vertex format
         {
             glGenVertexArrays(PrimitiveType::e_primitiveTypeCount, m_vaoIds);
-            glGenBuffers(PrimitiveType::e_primitiveTypeCount * 2, &m_vboIds[0][0]);
-            glGenBuffers(2, m_instanceDataVboIds);
+            glGenBuffers(sizeof(VBOs) / sizeof(GLuint), (GLuint*)(&m_vbos));
             for (ys_int32 i = 0; i < PrimitiveType::e_primitiveTypeCount; ++i)
             {
                 glBindVertexArray(m_vaoIds[i]);
@@ -624,16 +612,16 @@ struct GLRenderPrimitiveLines
                 glEnableVertexAttribArray(m_worldMtxAttribute + 3);
 
                 // Vertex buffer
-                glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[i][0]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_primVertices[i]);
                 glVertexAttribPointer(m_vertexAttribute, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
                 // Per-instance color buffer
-                glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instColors);
                 glVertexAttribPointer(m_colorAttribute, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
                 glVertexAttribDivisor(m_colorAttribute, 1);
 
                 // Per-instance world matrix buffer
-                glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instWorldMatrices);
                 const ys_int32 worldMtxColumnStride = 4 * sizeof(ysVec4);
                 glVertexAttribPointer(m_worldMtxAttribute + 0, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 0));
                 glVertexAttribPointer(m_worldMtxAttribute + 1, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 1));
@@ -644,12 +632,14 @@ struct GLRenderPrimitiveLines
                 glVertexAttribDivisor(m_worldMtxAttribute + 2, 1);
                 glVertexAttribDivisor(m_worldMtxAttribute + 3, 1);
             }
+            glBindVertexArray(0);
 
-            glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
+            // Allocate buffers for instance data. These are shared between per-primitive-type VAOs
+            glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instColors);
             glBufferData(GL_ARRAY_BUFFER, sizeof(m_instanceColors), m_instanceColors, GL_DYNAMIC_DRAW);
-
-            glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
+            glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instWorldMatrices);
             glBufferData(GL_ARRAY_BUFFER, sizeof(m_instanceWorldMatrices), m_instanceWorldMatrices, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
         }
 
         // Populate vertex/index buffers per primitive type
@@ -666,7 +656,7 @@ struct GLRenderPrimitiveLines
                 vertices[5].Set(1.0f, -1.0f, 1.0f);
                 vertices[6].Set(1.0f, 1.0f, 1.0f);
                 vertices[7].Set(-1.0f, 1.0f, 1.0f);
-                glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[PrimitiveType::e_aabb][0]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_primVertices[PrimitiveType::e_aabb]);
                 glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
                 // Index buffer
@@ -696,7 +686,7 @@ struct GLRenderPrimitiveLines
                 indices[11][0] = 3;
                 indices[11][1] = 7;
                 primitiveIndexCount[PrimitiveType::e_aabb] = 24;
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vboIds[PrimitiveType::e_aabb][1]);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vbos.m_primIndices[PrimitiveType::e_aabb]);
                 glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), &indices[0][0], GL_STATIC_DRAW);
             }
         }
@@ -715,13 +705,15 @@ struct GLRenderPrimitiveLines
         if (m_vaoIds[0])
         {
             glDeleteVertexArrays(PrimitiveType::e_primitiveTypeCount, m_vaoIds);
-            glDeleteBuffers(PrimitiveType::e_primitiveTypeCount * 2, &m_vboIds[0][0]);
+            glDeleteBuffers(sizeof(VBOs) / sizeof(GLuint), (GLuint*)(&m_vbos));
             for (ys_int32 i = 0; i < PrimitiveType::e_primitiveTypeCount; ++i)
             {
                 m_vaoIds[i] = 0;
-                m_vboIds[i][0] = 0;
-                m_vboIds[i][1] = 0;
+                m_vbos.m_primVertices[i] = 0;
+                m_vbos.m_primIndices[i] = 0;
             }
+            m_vbos.m_instColors = 0;
+            m_vbos.m_instWorldMatrices = 0;
         }
 
         if (m_programId)
@@ -733,7 +725,7 @@ struct GLRenderPrimitiveLines
 
     void PushAABB(const ysAABB& aabb, const ysTransform& xf, const Color& c)
     {
-        if (m_primitiveCount == e_maxPrimitives)
+        if (m_primitiveCount == e_primitiveCapacity)
         {
             Flush();
         }
@@ -778,10 +770,10 @@ struct GLRenderPrimitiveLines
                     if (typeCount > 0)
                     {
                         glBindVertexArray(m_vaoIds[prevType]);
-                        glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
-                        glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(ysMtx44), m_instanceWorldMatrices);
-                        glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
+                        glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instColors);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(Color), m_instanceColors);
+                        glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instWorldMatrices);
+                        glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(ysMtx44), m_instanceWorldMatrices);
                         glDrawElementsInstanced(GL_LINES, primitiveIndexCount[prevType], GL_UNSIGNED_INT, (void*)0, typeCount);
                         sCheckGLError();
                     }
@@ -800,9 +792,9 @@ struct GLRenderPrimitiveLines
             if (typeCount > 0)
             {
                 glBindVertexArray(m_vaoIds[prevType]);
-                glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instColors);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(Color), m_instanceColors);
-                glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
+                glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instWorldMatrices);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(ysMtx44), m_instanceWorldMatrices);
                 glDrawElementsInstanced(GL_LINES, primitiveIndexCount[prevType], GL_UNSIGNED_INT, (void*)0, typeCount);
                 sCheckGLError();
@@ -849,29 +841,30 @@ struct GLRenderPrimitiveLines
         return a.m_index < b.m_index;
     }
 
-    enum { e_maxPrimitives = 512 };
-    PrimitiveInstance m_primitives[e_maxPrimitives];
+    enum { e_primitiveCapacity = 512 };
+    PrimitiveInstance m_primitives[e_primitiveCapacity];
     ys_int32 m_primitiveCount;
 
-    // m_vboIds[i][0]: vertices
-    //            [1]: indices
-    GLuint m_vboIds[PrimitiveType::e_primitiveTypeCount][2];
     GLuint m_vaoIds[PrimitiveType::e_primitiveTypeCount];
     ys_int32 primitiveIndexCount[PrimitiveType::e_primitiveTypeCount];
 
-    // m_instanceDataVboIds[0]: colors
-    //                     [1]: world matrices
-    GLuint m_instanceDataVboIds[2];
+    struct VBOs
+    {
+        GLuint m_primVertices[PrimitiveType::e_primitiveTypeCount];
+        GLuint m_primIndices[PrimitiveType::e_primitiveTypeCount];
+        GLuint m_instWorldMatrices;
+        GLuint m_instColors;
+    }
+    m_vbos;
 
-    ysMtx44 m_instanceWorldMatrices[e_maxPrimitives];
-    Color m_instanceColors[e_maxPrimitives];
+    ysMtx44 m_instanceWorldMatrices[e_primitiveCapacity];
+    Color m_instanceColors[e_primitiveCapacity];
 
     GLuint m_programId;
     GLint m_projectionUniform;
     GLint m_viewUniform;
 
     GLint m_vertexAttribute;
-    // instanced attributes
     GLint m_colorAttribute;
     GLint m_worldMtxAttribute;
 };
