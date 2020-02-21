@@ -123,7 +123,7 @@ static void sCheckGLError()
     if (errCode != GL_NO_ERROR)
     {
         fprintf(stderr, "OpenGL error = %d\n", errCode);
-        assert(false);
+        ysAssert(false);
     }
 }
 
@@ -617,6 +617,11 @@ struct GLRenderPrimitiveLines
             {
                 glBindVertexArray(m_vaoIds[i]);
                 glEnableVertexAttribArray(m_vertexAttribute);
+                glEnableVertexAttribArray(m_colorAttribute);
+                glEnableVertexAttribArray(m_worldMtxAttribute + 0);
+                glEnableVertexAttribArray(m_worldMtxAttribute + 1);
+                glEnableVertexAttribArray(m_worldMtxAttribute + 2);
+                glEnableVertexAttribArray(m_worldMtxAttribute + 3);
 
                 // Vertex buffer
                 glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[i][0]);
@@ -624,16 +629,11 @@ struct GLRenderPrimitiveLines
 
                 // Per-instance color buffer
                 glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
-                glEnableVertexAttribArray(m_colorAttribute);
                 glVertexAttribPointer(m_colorAttribute, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
                 glVertexAttribDivisor(m_colorAttribute, 1);
 
                 // Per-instance world matrix buffer
                 glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 0);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 1);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 2);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 3);
                 const ys_int32 worldMtxColumnStride = 4 * sizeof(ysVec4);
                 glVertexAttribPointer(m_worldMtxAttribute + 0, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 0));
                 glVertexAttribPointer(m_worldMtxAttribute + 1, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 1));
@@ -646,10 +646,10 @@ struct GLRenderPrimitiveLines
             }
 
             glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(m_instanceWorldMatrices), m_instanceWorldMatrices, GL_DYNAMIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(m_instanceColors), m_instanceColors, GL_DYNAMIC_DRAW);
 
             glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(m_instanceColors), m_instanceColors, GL_DYNAMIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(m_instanceWorldMatrices), m_instanceWorldMatrices, GL_DYNAMIC_DRAW);
         }
 
         // Populate vertex/index buffers per primitive type
@@ -801,12 +801,13 @@ struct GLRenderPrimitiveLines
             {
                 glBindVertexArray(m_vaoIds[prevType]);
                 glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[0]);
-                glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(ysMtx44), m_instanceWorldMatrices);
-                glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(Color), m_instanceColors);
+                glBindBuffer(GL_ARRAY_BUFFER, m_instanceDataVboIds[1]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, typeCount * sizeof(ysMtx44), m_instanceWorldMatrices);
                 glDrawElementsInstanced(GL_LINES, primitiveIndexCount[prevType], GL_UNSIGNED_INT, (void*)0, typeCount);
                 sCheckGLError();
             }
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
             glBindVertexArray(0);
         }
         glUseProgram(0);
@@ -881,8 +882,8 @@ DebugDraw::DebugDraw()
 {
     m_showUI = true;
     m_drawBVH = true;
-    m_drawGeo = false;
-    m_drawBVHDepth = 0;
+    m_drawGeo = true;
+    m_drawBVHDepth = -1;
 
     m_lines = nullptr;
     m_triangles = nullptr;
