@@ -588,14 +588,14 @@ struct GLRenderPrimitiveLines
             ShaderLoader::sUnloadShader(&shaderSourceVS);
         }
 
-        m_projectionUniform = glGetUniformLocation(m_programId, "g_projectionMatrix");
-        m_viewUniform = glGetUniformLocation(m_programId, "g_viewMatrix");
+        m_uniformProjMatrix = glGetUniformLocation(m_programId, "g_projectionMatrix");
+        m_uniformViewMatrix = glGetUniformLocation(m_programId, "g_viewMatrix");
 
-        ysAssert(m_projectionUniform >= 0);
-        ysAssert(m_viewUniform >= 0);
-        m_vertexAttribute = 0;
-        m_colorAttribute = 1;
-        m_worldMtxAttribute = 2;
+        ysAssert(m_uniformProjMatrix >= 0);
+        ysAssert(m_uniformViewMatrix >= 0);
+        m_attributeVertex = 0;
+        m_attributeColor = 1;
+        m_attributeWorldMatrix = 2;
 
         // Generate and specify vertex format
         {
@@ -604,33 +604,33 @@ struct GLRenderPrimitiveLines
             for (ys_int32 i = 0; i < PrimitiveType::e_primitiveTypeCount; ++i)
             {
                 glBindVertexArray(m_vaoIds[i]);
-                glEnableVertexAttribArray(m_vertexAttribute);
-                glEnableVertexAttribArray(m_colorAttribute);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 0);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 1);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 2);
-                glEnableVertexAttribArray(m_worldMtxAttribute + 3);
+                glEnableVertexAttribArray(m_attributeVertex);
+                glEnableVertexAttribArray(m_attributeColor);
+                glEnableVertexAttribArray(m_attributeWorldMatrix + 0);
+                glEnableVertexAttribArray(m_attributeWorldMatrix + 1);
+                glEnableVertexAttribArray(m_attributeWorldMatrix + 2);
+                glEnableVertexAttribArray(m_attributeWorldMatrix + 3);
 
                 // Vertex buffer
                 glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_primVertices[i]);
-                glVertexAttribPointer(m_vertexAttribute, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+                glVertexAttribPointer(m_attributeVertex, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
                 // Per-instance color buffer
                 glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instColors);
-                glVertexAttribPointer(m_colorAttribute, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-                glVertexAttribDivisor(m_colorAttribute, 1);
+                glVertexAttribPointer(m_attributeColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+                glVertexAttribDivisor(m_attributeColor, 1);
 
                 // Per-instance world matrix buffer
                 glBindBuffer(GL_ARRAY_BUFFER, m_vbos.m_instWorldMatrices);
                 const ys_int32 worldMtxColumnStride = 4 * sizeof(ysVec4);
-                glVertexAttribPointer(m_worldMtxAttribute + 0, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 0));
-                glVertexAttribPointer(m_worldMtxAttribute + 1, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 1));
-                glVertexAttribPointer(m_worldMtxAttribute + 2, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 2));
-                glVertexAttribPointer(m_worldMtxAttribute + 3, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 3));
-                glVertexAttribDivisor(m_worldMtxAttribute + 0, 1);
-                glVertexAttribDivisor(m_worldMtxAttribute + 1, 1);
-                glVertexAttribDivisor(m_worldMtxAttribute + 2, 1);
-                glVertexAttribDivisor(m_worldMtxAttribute + 3, 1);
+                glVertexAttribPointer(m_attributeWorldMatrix + 0, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 0));
+                glVertexAttribPointer(m_attributeWorldMatrix + 1, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 1));
+                glVertexAttribPointer(m_attributeWorldMatrix + 2, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 2));
+                glVertexAttribPointer(m_attributeWorldMatrix + 3, 4, GL_FLOAT, GL_FALSE, worldMtxColumnStride, BUFFER_OFFSET(sizeof(ysVec4) * 3));
+                glVertexAttribDivisor(m_attributeWorldMatrix + 0, 1);
+                glVertexAttribDivisor(m_attributeWorldMatrix + 1, 1);
+                glVertexAttribDivisor(m_attributeWorldMatrix + 2, 1);
+                glVertexAttribDivisor(m_attributeWorldMatrix + 3, 1);
             }
             glBindVertexArray(0);
 
@@ -755,8 +755,8 @@ struct GLRenderPrimitiveLines
             ys_float32 view[16];
             g_camera.BuildProjectionMatrix(proj);
             g_camera.BuildViewMatrix(view);
-            glUniformMatrix4fv(m_projectionUniform, 1, GL_FALSE, proj);
-            glUniformMatrix4fv(m_viewUniform, 1, GL_FALSE, view);
+            glUniformMatrix4fv(m_uniformProjMatrix, 1, GL_FALSE, proj);
+            glUniformMatrix4fv(m_uniformViewMatrix, 1, GL_FALSE, view);
 
             PrimitiveType prevType = PrimitiveType::e_unknown;
             ys_int32 typeCount = 0;
@@ -861,12 +861,13 @@ struct GLRenderPrimitiveLines
     Color m_instanceColors[e_primitiveCapacity];
 
     GLuint m_programId;
-    GLint m_projectionUniform;
-    GLint m_viewUniform;
 
-    GLint m_vertexAttribute;
-    GLint m_colorAttribute;
-    GLint m_worldMtxAttribute;
+    GLint m_uniformProjMatrix;
+    GLint m_uniformViewMatrix;
+
+    GLint m_attributeVertex;
+    GLint m_attributeColor;
+    GLint m_attributeWorldMatrix;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
