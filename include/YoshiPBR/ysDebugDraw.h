@@ -2,8 +2,6 @@
 
 #include "YoshiPBR/ysMath.h"
 
-struct ysAABB;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Color
@@ -35,5 +33,6 @@ struct ysDebugDraw
     virtual void DrawSegmentList(const ysVec4* vertices, const Color* colors, ys_int32 segmentCount);
     virtual void DrawTriangleList(const ysVec4* vertices, const Color* colors, ys_int32 triangleCount);
 
-    virtual void DrawOBB(const ysAABB&, const ysTransform&, const Color&);
+    virtual void DrawWireBox(const ysVec4& halfDimensions, const ysTransform&, const Color&);
+    virtual void DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&);
 };

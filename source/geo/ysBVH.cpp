@@ -595,7 +595,12 @@ void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
     {
         for (ys_int32 i = 0; i < m_nodeCount; ++i)
         {
-            input->debugDraw->DrawOBB(m_nodes[i].m_aabb, ysTransform_identity, color);
+            const ysAABB& aabb = m_nodes[i].m_aabb;
+            ysVec4 halfDims = (aabb.m_max - aabb.m_min) * ysVec4_half;
+            ysTransform xf;
+            xf.q = ysQuat_identity;
+            xf.p = (aabb.m_min + aabb.m_max) * ysVec4_half;
+            input->debugDraw->DrawWireBox(halfDims, xf, color);
         }
         return;
     }
@@ -619,7 +624,12 @@ void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
         ys_int32 depth = nodeDepthStack[stackCount];
         if (depth == input->depth)
         {
-            input->debugDraw->DrawOBB(node->m_aabb, ysTransform_identity, color);
+            const ysAABB& aabb = node->m_aabb;
+            ysVec4 halfDims = (aabb.m_max - aabb.m_min) * ysVec4_half;
+            ysTransform xf;
+            xf.q = ysQuat_identity;
+            xf.p = (aabb.m_min + aabb.m_max) * ysVec4_half;
+            input->debugDraw->DrawWireBox(halfDims, xf, color);
             continue;
         }
         ysAssert(depth < input->depth);
