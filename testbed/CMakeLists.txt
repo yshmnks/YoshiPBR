@@ -22,6 +22,8 @@ set (TESTBED_RESOURCE_FILES
     shaders/primEdge_PS.glsl
     shaders/primFace_VS.glsl
     shaders/primFace_PS.glsl
+    shaders/texturedQuad_VS.glsl
+    shaders/texturedQuad_PS.glsl
 )
 
 add_executable(testbed ${TESTBED_SOURCE_FILES} ${TESTBED_RESOURCE_FILES})
