@@ -105,6 +105,11 @@ T ysMax(const T& a, const T& b)
 {
     return (a > b) ? a : b;
 }
+template <typename T>
+T ysAbs(const T& a)
+{
+    return ysMax(a, -a);
+}
 ysVec4 ysMin(const ysVec4&, const ysVec4&);
 ysVec4 ysMax(const ysVec4&, const ysVec4&);
 ysVec4 ysClamp(const ysVec4& unclamped, const ysVec4& min, const ysVec4& max);

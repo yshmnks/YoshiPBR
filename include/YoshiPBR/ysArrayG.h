@@ -74,7 +74,7 @@ void ysArrayG<T>::SetCapacity(ys_int32 capacity)
         return;
     }
     T* entries = static_cast<T*>(ysMalloc(sizeof(T) * capacity));
-    ysMemCpy(entries, m_entries, sizeof(T) * count);
+    ysMemCpy(entries, m_entries, sizeof(T) * m_count);
     ysSwap(m_entries, entries);
     m_capacity = capacity;
 }

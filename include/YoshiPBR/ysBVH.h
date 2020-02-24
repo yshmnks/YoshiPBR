@@ -4,6 +4,9 @@
 #include "YoshiPBR/ysStructures.h"
 
 struct ysDrawInputBVH;
+struct ysRayCastInput;
+struct ysRayCastOutput;
+struct ysScene;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +32,8 @@ struct ysBVH
     void Reset();
     void Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_int32 leafCount);
     void Destroy();
+
+    bool RayCastClosest(const ysScene* scene, ysRayCastOutput*, const ysRayCastInput&) const;
 
     void DebugDraw(const ysDrawInputBVH*) const;
 

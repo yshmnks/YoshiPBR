@@ -23,6 +23,8 @@ struct Camera
     ysVec4 ComputeUp() const;
     ysVec4 ComputeForward() const;
 
+    ysTransform ComputeEyeTransform() const;
+
     ysVec4 m_center;
     ys_float32 m_yaw;
     ys_float32 m_pitch;
@@ -65,6 +67,7 @@ struct DebugDraw : public ysDebugDraw
     bool m_showUI;
     bool m_drawBVH;
     bool m_drawGeo;
+    bool m_drawRender;
     ys_int32 m_drawBVHDepth;
 
     GLRenderLines* m_lines;

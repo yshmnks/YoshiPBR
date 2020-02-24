@@ -18,6 +18,11 @@ static ys_float32 s_uiScale = 1.0f;
 static ys_float32 s_mouseX = 0.0f;
 static ys_float32 s_mouseY = 0.0f;
 
+static ysArrayG<Color> s_pixels = ysArrayG<Color>();
+static ys_int32 s_pixelCountX = 0;
+static ys_int32 s_pixelCountY = 0;
+static ysSceneRenderInput s_renderInput = ysSceneRenderInput();
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void glfwErrorCallback(int error, const char* description)
@@ -87,7 +92,31 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImGui::SliderInt("Depth", &g_debugDraw.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
                 ImGui::Separator();
 
+                ImGui::Checkbox("Draw Render", &g_debugDraw.m_drawRender);
+                ImGui::SameLine();
                 ImVec2 button_sz = ImVec2(-1, 0);
+                if (ImGui::Button("Render", button_sz))
+                {
+                    ys_float32 aspectRatio = (ys_float32)windowWidth / (ys_float32)windowHeight;
+                    s_renderInput.m_eye = g_camera.ComputeEyeTransform();
+                    s_renderInput.m_fovY = g_camera.m_verticalFov;
+                    s_renderInput.m_pixelCountY = windowHeight;
+                    s_renderInput.m_pixelCountX = ys_int32(aspectRatio * windowHeight);
+
+                    ysSceneRenderOutput renderOutput;
+                    ysScene_Render(s_scene, &renderOutput, &s_renderInput);
+
+                    s_pixels.SetCount(windowWidth * windowHeight);
+                    s_pixelCountX = windowWidth;
+                    s_pixelCountY = windowHeight;
+                    for (ys_int32 i = 0; i < windowWidth * windowHeight; ++i)
+                    {
+                        const ysFloat3& rgb = renderOutput.m_pixels[i];
+                        s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, 1.0f);
+                    }
+                }
+                ImGui::Separator();
+
                 if (ImGui::Button("Quit", button_sz))
                 {
                     glfwSetWindowShouldClose(g_mainWindow, GL_TRUE);
@@ -242,7 +271,7 @@ static void sUpdateCamera(ys_float32 moveDistance)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sCreateScene()
 {
-    const ys_int32 n = 16;
+    const ys_int32 n = 4;
     ysInputTriangle triangles[n][n][n];
     for (ys_int32 i = 0; i < n; ++i)
     {
@@ -268,6 +297,7 @@ static void sCreateScene()
                 triangle->vertices[1] = ysMul(xf, triangle->vertices[1] * scale);
                 triangle->vertices[2] = ysMul(xf, triangle->vertices[2] * scale);
 #endif
+                triangle->twoSided = true;
             }
         }
     }
@@ -386,6 +416,23 @@ int main(int, char**)
             ysDrawInputGeo input;
             input.debugDraw = &g_debugDraw;
             ysScene_DebugDrawGeo(s_scene, &input);
+        }
+
+        if (g_debugDraw.m_drawRender)
+        {
+            Texture2D tex;
+            tex.m_pixels = s_pixels.GetEntries();
+            tex.m_width = s_pixelCountX;
+            tex.m_height = s_pixelCountY;
+
+            ys_float32 aspectRatio = (ys_float32)s_renderInput.m_pixelCountX / (ys_float32)s_renderInput.m_pixelCountY;
+
+            ysTransform xf;
+            xf.p = ysMul(s_renderInput.m_eye, -ysVec4_unitZ);
+            xf.q = s_renderInput.m_eye.q;
+            ys_float32 quadHeight = tanf(s_renderInput.m_fovY) * 2.0f;
+            ys_float32 quadWidth = quadHeight * aspectRatio;
+            g_debugDraw.DrawTexturedQuad(tex, quadWidth, quadHeight, xf, false, true);
         }
 
         g_debugDraw.Flush();
