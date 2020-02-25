@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <float.h>
+#include <memory>
 
 #define ysAssert(x)		\
     if (!(x))			\

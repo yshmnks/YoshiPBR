@@ -104,6 +104,16 @@ ysVec4 Camera::ComputeForward() const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysTransform Camera::ComputeEyeTransform() const
+{
+    ysTransform camXf;
+    camXf.p = m_center;
+    camXf.q = sComputeCameraQuat(m_yaw, m_pitch);
+    return camXf;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sCheckGLError()
 {
     GLenum errCode = glGetError();
@@ -391,8 +401,10 @@ struct GLRenderLines
         
         glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[1]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, m_count * sizeof(Color), m_colors);
-        
-        glDrawArrays(GL_LINES, 0, m_count);
+
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+        glDrawArrays(GL_LINES, 0, 2 * m_count);
         
         sCheckGLError();
         
@@ -535,11 +547,10 @@ struct GLRenderTriangles
         
         glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[1]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, m_count * sizeof(Color), m_colors);
-        
-        glEnable(GL_BLEND);
-        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDrawArrays(GL_TRIANGLES, 0, m_count);
+
+        glEnable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
+        glDrawArrays(GL_TRIANGLES, 0, 3 * m_count);
         
         sCheckGLError();
         
@@ -808,6 +819,7 @@ struct GLRenderPrimitiveLines
         }
         std::sort(m_primitives, m_primitives + m_primitiveCount, sComparePrimitiveInstances);
 
+        glEnable(GL_DEPTH_TEST);
         glUseProgram(m_programId);
         {
             ys_float32 proj[16];
@@ -932,16 +944,295 @@ struct GLRenderPrimitiveLines
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct GLRenderTexturedQuads
+{
+    void Create()
+    {
+        {
+            char* shaderSourceVS = nullptr;
+            char* shaderSourcePS = nullptr;
+            ys_uint32 lenVS = 0;
+            ys_uint32 lenPS = 0;
+            ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/texturedQuad_VS.glsl");
+            ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/texturedQuad_PS.glsl");
+            ysAssert(resVS == 0);
+            ysAssert(resPS == 0);
+            m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
+            ShaderLoader::sUnloadShader(&shaderSourcePS);
+            ShaderLoader::sUnloadShader(&shaderSourceVS);
+        }
+
+        m_uniformProjMatrix = glGetUniformLocation(m_programId, "g_projectionMatrix");
+        m_uniformViewMatrix = glGetUniformLocation(m_programId, "g_viewMatrix");
+        m_uniformWorldMatrix = glGetUniformLocation(m_programId, "cb_worldMatrix");
+        m_uniformTexture = glGetUniformLocation(m_programId, "Texture");
+
+        ysAssert(m_uniformProjMatrix >= 0);
+        ysAssert(m_uniformViewMatrix >= 0);
+        ysAssert(m_uniformWorldMatrix >= 0);
+        ysAssert(m_uniformTexture >= 0);
+        m_attributeVertex = 0;
+        m_attributeTextureUV = 1;
+
+        // Generate and specify vertex format
+        {
+            glGenVertexArrays(1, &m_vaoId);
+            glGenBuffers(2, m_vboIds);
+
+            glBindVertexArray(m_vaoId);
+            glEnableVertexAttribArray(m_attributeVertex);
+            glEnableVertexAttribArray(m_attributeTextureUV);
+
+            ys_float32 vertexData[6][2];
+
+            vertexData[0][0] = -1.0f;
+            vertexData[0][1] = -1.0f;
+
+            vertexData[1][0] = 1.0f;
+            vertexData[1][1] = -1.0f;
+
+            vertexData[2][0] = 1.0f;
+            vertexData[2][1] = 1.0f;
+
+            vertexData[3][0] = -1.0f;
+            vertexData[3][1] = -1.0f;
+
+            vertexData[4][0] = 1.0f;
+            vertexData[4][1] = 1.0f;
+
+            vertexData[5][0] = -1.0f;
+            vertexData[5][1] = 1.0f;
+
+            ys_float32 uvData[6][2];
+
+            uvData[0][0] = 0.0f;
+            uvData[0][1] = 1.0f;
+
+            uvData[1][0] = 1.0f;
+            uvData[1][1] = 1.0f;
+
+            uvData[2][0] = 1.0f;
+            uvData[2][1] = 0.0f;
+
+            uvData[3][0] = 0.0f;
+            uvData[3][1] = 1.0f;
+
+            uvData[4][0] = 1.0f;
+            uvData[4][1] = 0.0f;
+
+            uvData[5][0] = 0.0f;
+            uvData[5][1] = 0.0f;
+
+            // Vertex buffer
+            glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[0]);
+            glVertexAttribPointer(m_attributeVertex, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+            glBufferData(GL_ARRAY_BUFFER, sizeof(vertexData), &vertexData[0][0], GL_STATIC_DRAW);
+
+            // Texture coordinates
+            glBindBuffer(GL_ARRAY_BUFFER, m_vboIds[1]);
+            glVertexAttribPointer(m_attributeTextureUV, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+            glBufferData(GL_ARRAY_BUFFER, sizeof(uvData), &uvData[0][0], GL_STATIC_DRAW);
+
+            sCheckGLError();
+        }
+
+        // Generate and specify vertex format
+        {
+            GLuint m_textureIds[e_quadCapacity];
+            glGenTextures(e_quadCapacity, m_textureIds);
+            for (ys_int32 i = 0; i < e_quadCapacity; ++i)
+            {
+                m_quads[i].m_textureId = m_textureIds[i];
+                glBindTexture(GL_TEXTURE_2D, m_textureIds[i]);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // All this is for debug draw. No need for mip-maps
+            }
+            sCheckGLError();
+        }
+
+        // Cleanup
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+        m_quadCount = 0;
+    }
+
+    void Destroy()
+    {
+        if (m_vaoId)
+        {
+            glDeleteVertexArrays(1, &m_vaoId);
+            glDeleteBuffers(2, m_vboIds);
+            m_vaoId = 0;
+            m_vboIds[0] = 0;
+            m_vboIds[1] = 0;
+        }
+
+        for (ys_int32 i = 0; i < e_quadCapacity; ++i)
+        {
+            if (m_quads[i].m_textureId != 0)
+            {
+                glDeleteTextures(1, &m_quads[i].m_textureId);
+                m_quads[i].m_textureId = 0;
+            }
+        }
+
+        if (m_programId)
+        {
+            glDeleteProgram(m_programId);
+            m_programId = 0;
+        }
+    }
+
+    void PushQuad(const Texture2D& texture, ys_float32 width, ys_float32 height, const ysTransform& xf, bool useDepthTest, bool useAlphaAsCutout)
+    {
+        if (m_quadCount == e_quadCapacity)
+        {
+            Flush();
+        }
+        QuadInstance* quad = m_quads + m_quadCount;
+        quad->m_transform = xf;
+        quad->m_scaleX = width * 0.5f;
+        quad->m_scaleY = height * 0.5f;
+        quad->m_useDepthTest = useDepthTest;
+        quad->m_useAlphaAsCutout = useAlphaAsCutout;
+
+        glBindTexture(GL_TEXTURE_2D, quad->m_textureId);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.m_width, texture.m_height, 0, GL_RGBA, GL_FLOAT, texture.m_pixels);
+
+        m_quadCount++;
+    }
+
+    void Flush()
+    {
+        if (m_quadCount == 0)
+        {
+            return;
+        }
+
+
+        glUseProgram(m_programId);
+        glBindVertexArray(m_vaoId);
+        {
+            const GLint textureUnit = 0;
+            glUniform1i(m_uniformTexture, textureUnit);
+            glActiveTexture(GL_TEXTURE0 + textureUnit);
+
+            ys_float32 proj[16];
+            ys_float32 view[16];
+            g_camera.BuildProjectionMatrix(proj);
+            g_camera.BuildViewMatrix(view);
+            glUniformMatrix4fv(m_uniformProjMatrix, 1, GL_FALSE, proj);
+            glUniformMatrix4fv(m_uniformViewMatrix, 1, GL_FALSE, view);
+
+            glEnable(GL_DEPTH_TEST);
+            {
+                for (ys_int32 i = 0; i < m_quadCount; ++i)
+                {
+                    const QuadInstance* quad = m_quads + i;
+                    if (quad->m_useDepthTest == false)
+                    {
+                        continue;
+                    }
+                    ysMtx44 worldMtx = ysMtxFromTransform(quad->m_transform);
+                    worldMtx.cx = worldMtx.cx * ysSplat(quad->m_scaleX);
+                    worldMtx.cy = worldMtx.cy * ysSplat(quad->m_scaleY);
+                    glUniformMatrix4fv(m_uniformWorldMatrix, 1, GL_FALSE, (ys_float32*)(&worldMtx));
+                    glBindTexture(GL_TEXTURE_2D, quad->m_textureId);
+                    if (quad->m_useAlphaAsCutout)
+                    {
+                        glEnable(GL_BLEND);
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    }
+                    else
+                    {
+                        glDisable(GL_BLEND);
+                    }
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                    sCheckGLError();
+                }
+            }
+
+            glDisable(GL_DEPTH_TEST);
+            {
+                for (ys_int32 i = 0; i < m_quadCount; ++i)
+                {
+                    const QuadInstance* quad = m_quads + i;
+                    if (quad->m_useDepthTest)
+                    {
+                        continue;
+                    }
+                    ysMtx44 worldMtx = ysMtxFromTransform(quad->m_transform);
+                    worldMtx.cx = worldMtx.cx * ysSplat(quad->m_scaleX);
+                    worldMtx.cy = worldMtx.cy * ysSplat(quad->m_scaleY);
+                    glUniformMatrix4fv(m_uniformWorldMatrix, 1, GL_FALSE, (ys_float32*)(&worldMtx));
+                    glBindTexture(GL_TEXTURE_2D, quad->m_textureId);
+                    if (quad->m_useAlphaAsCutout)
+                    {
+                        glEnable(GL_BLEND);
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    }
+                    else
+                    {
+                        glDisable(GL_BLEND);
+                    }
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                    sCheckGLError();
+                }
+            }
+        }
+        glBindVertexArray(0);
+        glUseProgram(0);
+
+        m_quadCount = 0;
+    }
+
+    struct QuadInstance
+    {
+        ysTransform m_transform;
+        ys_float32 m_scaleX;
+        ys_float32 m_scaleY;
+        bool m_useDepthTest;
+        bool m_useAlphaAsCutout;
+        GLuint m_textureId;
+    };
+
+    enum
+    {
+        e_quadCapacity = 16
+    };
+    QuadInstance m_quads[e_quadCapacity];
+    ys_int32 m_quadCount;
+
+    GLuint m_vaoId;
+    GLuint m_vboIds[2];
+
+    GLuint m_programId;
+
+    GLint m_uniformProjMatrix;
+    GLint m_uniformViewMatrix;
+    GLint m_uniformWorldMatrix;
+    GLint m_uniformTexture;
+
+    GLint m_attributeVertex;
+    GLint m_attributeTextureUV;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 DebugDraw::DebugDraw()
 {
     m_showUI = true;
     m_drawBVH = true;
     m_drawGeo = true;
+    m_drawRender = true;
     m_drawBVHDepth = -1;
 
     m_lines = nullptr;
     m_triangles = nullptr;
     m_primLines = nullptr;
+    m_texturedQuads = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -950,6 +1241,8 @@ DebugDraw::~DebugDraw()
 {
     ysAssert(m_lines == nullptr);
     ysAssert(m_triangles == nullptr);
+    ysAssert(m_primLines == nullptr);
+    ysAssert(m_texturedQuads == nullptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -962,6 +1255,8 @@ void DebugDraw::Create()
     m_triangles->Create();
     m_primLines = static_cast<GLRenderPrimitiveLines*>(ysMalloc(sizeof(GLRenderPrimitiveLines)));
     m_primLines->Create();
+    m_texturedQuads = static_cast<GLRenderTexturedQuads*>(ysMalloc(sizeof(GLRenderTexturedQuads)));
+    m_texturedQuads->Create();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -979,6 +1274,10 @@ void DebugDraw::Destroy()
     m_primLines->Destroy();
     ysFree(m_primLines);
     m_primLines = nullptr;
+
+    m_texturedQuads->Destroy();
+    ysFree(m_texturedQuads);
+    m_texturedQuads = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1020,9 +1319,18 @@ void DebugDraw::DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransfor
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void DebugDraw::DrawTexturedQuad(
+    const Texture2D& texture, ys_float32 width, ys_float32 height, const ysTransform& xf, bool useDepthTest, bool useAlphaAsCutout)
+{
+    m_texturedQuads->PushQuad(texture, width, height, xf, useDepthTest, useAlphaAsCutout);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void DebugDraw::Flush()
 {
     m_triangles->Flush();
     m_lines->Flush();
     m_primLines->Flush();
+    m_texturedQuads->Flush();
 }

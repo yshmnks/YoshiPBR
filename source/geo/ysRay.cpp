@@ -1,19 +1,9 @@
-#pragma once
-
-#include "YoshiPBR/ysMath.h"
-
-struct ysRay;
+#include "YoshiPBR/ysRay.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ysAABB
+void ysRay::Reset()
 {
-    void SetInvalid();
-    bool Contains(const ysAABB&) const;
-    bool IntersectsRay(const ysRay& ray) const;
-
-    static ysAABB Merge(const ysAABB&, const ysAABB&);
-
-    ysVec4 m_min;
-    ysVec4 m_max;
-};
+    m_origin = ysVec4_zero;
+    m_direction = ysVec4_unitZ;
+}

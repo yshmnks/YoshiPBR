@@ -4,6 +4,7 @@ set(YOSHIPBR_SOURCE_FILES
 	common/ysStructures.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp
+    geo/ysRay.cpp
     geo/ysShape.cpp
     geo/ysTriangle.cpp
     scene/ysScene.cpp
@@ -17,6 +18,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysBVH.h
 	../include/YoshiPBR/ysDebugDraw.h
     ../include/YoshiPBR/ysMath.h
+    ../include/YoshiPBR/ysRay.h
     ../include/YoshiPBR/ysScene.h
     ../include/YoshiPBR/ysShape.h
 	../include/YoshiPBR/ysStructures.h

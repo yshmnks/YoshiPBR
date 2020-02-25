@@ -1,5 +1,8 @@
 #include "YoshiPBR/ysBVH.h"
 #include "YoshiPBR/ysDebugDraw.h"
+#include "YoshiPBR/ysRay.h"
+#include "YoshiPBR/ysScene.h"
+#include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
 
 #include <algorithm>
@@ -583,6 +586,54 @@ void ysBVH::Destroy()
 {
     ysFree(m_nodes);
     m_nodes = nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const ysRayCastInput& input) const
+{
+    bool anyHit = false;
+    ysRayCastInput rci = input;
+
+    const ys_int32 k_stackSize = 256;
+    ysAssert(m_depth < k_stackSize);
+    ys_int32 nodeIndexStack[k_stackSize];
+    nodeIndexStack[0] = 0;
+    ys_int32 stackCount = 1;
+    while (stackCount > 0)
+    {
+        stackCount--;
+        const Node* node = m_nodes + nodeIndexStack[stackCount];
+        bool rayIntersectsNode = node->m_aabb.IntersectsRay(rci.m_ray);
+        if (rayIntersectsNode == false)
+        {
+            continue;
+        }
+
+        ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
+        if (node->m_left != ys_nullIndex)
+        {
+            //ysAssert(node->m_shapeId == ys_nullShapeId);
+            nodeIndexStack[stackCount] = node->m_left;
+            stackCount++;
+            nodeIndexStack[stackCount] = node->m_right;
+            stackCount++;
+        }
+        else
+        {
+            //ysAssert(node->m_shapeId != ys_nullShapeId);
+            const ysShape& shape = scene->m_shapes[node->m_shapeId.m_index];
+            ysRayCastOutput rco;
+            bool hit = shape.RayCast(scene, &rco, rci);
+            if (hit)
+            {
+                rci.m_maxLambda = rco.m_lambda;
+                *output = rco;
+                anyHit = true;
+            }
+        }
+    }
+    return anyHit;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

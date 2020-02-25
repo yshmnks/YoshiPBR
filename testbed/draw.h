@@ -7,6 +7,7 @@ struct GLFWwindow;
 struct GLRenderLines;
 struct GLRenderTriangles;
 struct GLRenderPrimitiveLines;
+struct GLRenderTexturedQuads;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +23,8 @@ struct Camera
     ysVec4 ComputeUp() const;
     ysVec4 ComputeForward() const;
 
+    ysTransform ComputeEyeTransform() const;
+
     ysVec4 m_center;
     ys_float32 m_yaw;
     ys_float32 m_pitch;
@@ -29,6 +32,16 @@ struct Camera
     ys_float32 m_aspectRatio; // frustum width / height
     ys_float32 m_near;
     ys_float32 m_far;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct Texture2D
+{
+    // row major pixels from top left to bottom right
+    const Color* m_pixels;
+    ys_int32 m_width;
+    ys_int32 m_height;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,17 +60,22 @@ struct DebugDraw : public ysDebugDraw
     virtual void DrawWireBox(const ysVec4& halfDimensions , const ysTransform&, const Color& color) override;
     virtual void DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&) override;
 
+    void DrawTexturedQuad(const Texture2D&, ys_float32 xWidth, ys_float32 yHeight, const ysTransform&, bool useDepthTest, bool useAlphaAsCutout);
+
     void Flush();
 
     bool m_showUI;
     bool m_drawBVH;
     bool m_drawGeo;
+    bool m_drawRender;
     ys_int32 m_drawBVHDepth;
 
     GLRenderLines* m_lines;
     GLRenderTriangles* m_triangles;
 
     GLRenderPrimitiveLines* m_primLines;
+
+    GLRenderTexturedQuads* m_texturedQuads;
 };
 
 extern DebugDraw g_debugDraw;
