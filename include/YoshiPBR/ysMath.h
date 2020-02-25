@@ -61,6 +61,8 @@ extern const ysVec4 ysVec4_zero;
 extern const ysVec4 ysVec4_half;
 extern const ysVec4 ysVec4_one;
 extern const ysVec4 ysVec4_two;
+extern const ysVec4 ysVec4_pi;
+extern const ysVec4 ysVec4_2pi;
 extern const ysVec4 ysVec4_maxFloat;
 extern const ysVec4 ysVec4_unitX;
 extern const ysVec4 ysVec4_unitY;
