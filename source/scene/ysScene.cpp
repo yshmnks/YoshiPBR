@@ -93,11 +93,11 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
     ys_int32 pixelIdx = 0;
     for (ys_int32 i = 0; i < input->m_pixelCountY; ++i)
     {
-        ys_float32 yFraction = 0.5f - ys_float32(i + 1) / ys_float32(input->m_pixelCountY);
+        ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input->m_pixelCountY);
         ys_float32 y = height * yFraction;
         for (ys_int32 j = 0; j < input->m_pixelCountX; ++j)
         {
-            ys_float32 xFraction = ys_float32(j + 1) / ys_float32(input->m_pixelCountX) - 0.5f;
+            ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input->m_pixelCountX) - 1.0f;
             ys_float32 x = width * xFraction;
 
             ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
