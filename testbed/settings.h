@@ -13,6 +13,8 @@ struct TestbedSettings
     bool m_drawGeo;
     bool m_drawRender;
     ys_int32 m_drawBVHDepth;
+
+    ys_float32 m_moveSpeed;
 };
 
 extern TestbedSettings g_settings;

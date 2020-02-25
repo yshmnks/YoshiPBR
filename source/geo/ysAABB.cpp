@@ -19,7 +19,7 @@ bool ysAABB::Contains(const ysAABB& aabb) const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool ysAABB::IntersectsRay(const ysRay& ray) const
+bool ysAABB::IntersectsRay(const ysRay& ray, ys_float32 maxLambda) const
 {
     const ys_float32 tol = ys_epsilon;
 
@@ -28,7 +28,7 @@ bool ysAABB::IntersectsRay(const ysRay& ray) const
     ysVec4 dInv = ysVec4_one / d;
 
     ys_float32 tMin = 0.0f;
-    ys_float32 tMax = ys_maxFloat;
+    ys_float32 tMax = maxLambda;
 
     // Clip ray against yz planes
     if (d.x > tol)

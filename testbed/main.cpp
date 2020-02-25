@@ -86,6 +86,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
             if (ImGui::BeginTabItem("Controls"))
             {
                 ImGui::SliderAngle("FoV", &g_camera.m_verticalFov, 1.0f , 89.0f, "%.0f degrees");
+                ImGui::SliderFloat("Speed", &g_settings.m_moveSpeed, 0.0f, 100.0f, "%.1f m/s");
                 ImGui::Separator();
 
                 ImGui::Checkbox("Draw Geo", &g_settings.m_drawGeo);
@@ -273,7 +274,7 @@ static void sUpdateCamera(ys_float32 moveDistance)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sCreateScene()
 {
-    const ys_int32 n = 4;
+    const ys_int32 n = 24;
     ysInputTriangle triangles[n][n][n];
     for (ys_int32 i = 0; i < n; ++i)
     {
@@ -403,7 +404,8 @@ int main(int, char**)
             ImGui::End();
         }
 
-        sUpdateCamera(0.1f);
+        ys_float32 cameraMoveStep = g_settings.m_moveSpeed * (ys_float32)frameTime;
+        sUpdateCamera(cameraMoveStep);
 
         if (g_settings.m_drawBVH)
         {

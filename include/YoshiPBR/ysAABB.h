@@ -10,7 +10,7 @@ struct ysAABB
 {
     void SetInvalid();
     bool Contains(const ysAABB&) const;
-    bool IntersectsRay(const ysRay& ray) const;
+    bool IntersectsRay(const ysRay& ray, ys_float32 maxLambda) const;
 
     static ysAABB Merge(const ysAABB&, const ysAABB&);
 

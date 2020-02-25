@@ -11,4 +11,6 @@ TestbedSettings::TestbedSettings()
     m_drawGeo = true;
     m_drawRender = true;
     m_drawBVHDepth = -1;
+
+    m_moveSpeed = 8.0f;
 }

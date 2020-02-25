@@ -604,7 +604,7 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const 
     {
         stackCount--;
         const Node* node = m_nodes + nodeIndexStack[stackCount];
-        bool rayIntersectsNode = node->m_aabb.IntersectsRay(rci.m_ray);
+        bool rayIntersectsNode = node->m_aabb.IntersectsRay(rci.m_ray, rci.m_maxLambda);
         if (rayIntersectsNode == false)
         {
             continue;
