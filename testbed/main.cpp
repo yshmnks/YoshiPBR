@@ -274,40 +274,74 @@ static void sUpdateCamera(ys_float32 moveDistance)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sCreateScene()
 {
-    const ys_int32 n = 24;
-    ysInputTriangle triangles[n][n][n];
-    for (ys_int32 i = 0; i < n; ++i)
+
+    const ys_float32 h = 4.0f;
+    ysVec4 corners[2][2][2];
+    for (ys_int32 i = 0; i < 2; ++i)
     {
-        for (ys_int32 j = 0; j < n; ++j)
+        ys_float32 x = 2.0f * i - 1.0f;
+        for (ys_int32 j = 0; j < 2; ++j)
         {
-            for (ys_int32 k = 0; k < n; ++k)
+            ys_float32 y = 2.0f * j - 1.0f;
+            for (ys_int32 k = 0; k < 2; ++k)
             {
-                ysInputTriangle* triangle = &triangles[i][j][k];
-                triangle->vertices[0] = ysVecSet(-0.25f, -0.25f, -0.25f);
-                triangle->vertices[1] = ysVecSet(0.25f, -0.25f, -0.25f);
-                triangle->vertices[2] = ysVecSet(0.25f, 0.25f, 0.25f);
-#if 0
-                ysVec4 asdf = ysVecSet(ys_float32(i), ys_float32(j), ys_float32(k)) * ysSplat(1.0f);
-                triangle->vertices[0] = triangle->vertices[0] + asdf;
-                triangle->vertices[1] = triangle->vertices[1] + asdf;
-                triangle->vertices[2] = triangle->vertices[2] + asdf;
-#else
-                ysTransform xf;
-                xf.q = ysRandomQuat();
-                xf.p = ysRandom3(ysVec4_zero, ysSplat(ys_float32(n)) * ysVecSet(1.0f, 2.0f, 4.0f));
-                ysVec4 scale = ysRandom3(ysSplat(0.25f), ysSplat(4.0f));
-                triangle->vertices[0] = ysMul(xf, triangle->vertices[0] * scale);
-                triangle->vertices[1] = ysMul(xf, triangle->vertices[1] * scale);
-                triangle->vertices[2] = ysMul(xf, triangle->vertices[2] * scale);
-#endif
-                triangle->twoSided = true;
+                ys_float32 z = 2.0f * k - 1.0f;
+                corners[i][j][k] = ysVecSet(x, y, z) * ysSplat(h);
             }
         }
     }
 
+    ysInputTriangle triangles[5][2];
+    ys_int32 wallIdx = 0;
+    triangles[wallIdx][0].vertices[0] = corners[0][0][0];
+    triangles[wallIdx][0].vertices[1] = corners[1][0][0];
+    triangles[wallIdx][0].vertices[2] = corners[1][1][0];
+    triangles[wallIdx][0].twoSided = false;
+    triangles[wallIdx][1].vertices[0] = corners[0][0][0];
+    triangles[wallIdx][1].vertices[1] = corners[1][1][0];
+    triangles[wallIdx][1].vertices[2] = corners[0][1][0];
+    triangles[wallIdx][1].twoSided = false;
+    wallIdx++;
+    triangles[wallIdx][0].vertices[0] = corners[1][1][1];
+    triangles[wallIdx][0].vertices[1] = corners[1][0][1];
+    triangles[wallIdx][0].vertices[2] = corners[0][0][1];
+    triangles[wallIdx][0].twoSided = false;
+    triangles[wallIdx][1].vertices[0] = corners[0][1][1];
+    triangles[wallIdx][1].vertices[1] = corners[1][1][1];
+    triangles[wallIdx][1].vertices[2] = corners[0][0][1];
+    triangles[wallIdx][1].twoSided = false;
+    wallIdx++;
+    triangles[wallIdx][0].vertices[0] = corners[0][0][0];
+    triangles[wallIdx][0].vertices[1] = corners[0][1][0];
+    triangles[wallIdx][0].vertices[2] = corners[0][1][1];
+    triangles[wallIdx][0].twoSided = false;
+    triangles[wallIdx][1].vertices[0] = corners[0][0][0];
+    triangles[wallIdx][1].vertices[1] = corners[0][1][1];
+    triangles[wallIdx][1].vertices[2] = corners[0][0][1];
+    triangles[wallIdx][1].twoSided = false;
+    wallIdx++;
+    triangles[wallIdx][0].vertices[0] = corners[1][1][1];
+    triangles[wallIdx][0].vertices[1] = corners[1][1][0];
+    triangles[wallIdx][0].vertices[2] = corners[1][0][0];
+    triangles[wallIdx][0].twoSided = false;
+    triangles[wallIdx][1].vertices[0] = corners[1][0][1];
+    triangles[wallIdx][1].vertices[1] = corners[1][1][1];
+    triangles[wallIdx][1].vertices[2] = corners[1][0][0];
+    triangles[wallIdx][1].twoSided = false;
+    wallIdx++;
+    triangles[wallIdx][0].vertices[0] = corners[0][1][0];
+    triangles[wallIdx][0].vertices[1] = corners[1][1][0];
+    triangles[wallIdx][0].vertices[2] = corners[1][1][1];
+    triangles[wallIdx][0].twoSided = false;
+    triangles[wallIdx][1].vertices[0] = corners[0][1][0];
+    triangles[wallIdx][1].vertices[1] = corners[1][1][1];
+    triangles[wallIdx][1].vertices[2] = corners[0][1][1];
+    triangles[wallIdx][1].twoSided = false;
+    wallIdx++;
+
     ysSceneDef sceneDef;
-    sceneDef.m_triangles = &triangles[0][0][0];
-    sceneDef.m_triangleCount = n * n * n;
+    sceneDef.m_triangles = &triangles[0][0];
+    sceneDef.m_triangleCount = 10;
 
     s_scene = ysScene_Create(&sceneDef);
 }
