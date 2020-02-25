@@ -4,6 +4,12 @@
 #include <float.h>
 #include <memory>
 
+#if defined(_DEBUG)
+#define ysDEBUG_BUILD (1)
+#else
+#define ysDEBUG_BUILD (0)
+#endif
+
 #define ysAssert(x)		\
     if (!(x))			\
     {					\

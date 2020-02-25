@@ -1,6 +1,8 @@
 #include "YoshiPBR/YoshiPBR.h"
 
+#include "camera.h"
 #include "draw.h"
+#include "settings.h"
 
 #include "glad/glad.h"
 #include "glfw/glfw3.h"
@@ -74,11 +76,11 @@ static void sDestroyUI()
 static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 {
     int menuWidth = 256;
-    if (g_debugDraw.m_showUI)
+    if (g_settings.m_showUI)
     {
         ImGui::SetNextWindowPos(ImVec2((float)windowWidth - menuWidth - 10, 10));
         ImGui::SetNextWindowSize(ImVec2((float)menuWidth, (float)windowHeight - 20));
-        ImGui::Begin("Tools", &g_debugDraw.m_showUI, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+        ImGui::Begin("Tools", &g_settings.m_showUI, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
         if (ImGui::BeginTabBar("ControlTabs", ImGuiTabBarFlags_None))
         {
             if (ImGui::BeginTabItem("Controls"))
@@ -86,13 +88,13 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImGui::SliderAngle("FoV", &g_camera.m_verticalFov, 1.0f , 89.0f, "%.0f degrees");
                 ImGui::Separator();
 
-                ImGui::Checkbox("Draw Geo", &g_debugDraw.m_drawGeo);
-                ImGui::Checkbox("Draw BVH", &g_debugDraw.m_drawBVH);
+                ImGui::Checkbox("Draw Geo", &g_settings.m_drawGeo);
+                ImGui::Checkbox("Draw BVH", &g_settings.m_drawBVH);
                 ImGui::SameLine();
-                ImGui::SliderInt("Depth", &g_debugDraw.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
+                ImGui::SliderInt("Depth", &g_settings.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
                 ImGui::Separator();
 
-                ImGui::Checkbox("Draw Render", &g_debugDraw.m_drawRender);
+                ImGui::Checkbox("Draw Render", &g_settings.m_drawRender);
                 ImGui::SameLine();
                 ImVec2 button_sz = ImVec2(-1, 0);
                 if (ImGui::Button("Render", button_sz))
@@ -154,7 +156,7 @@ static void sKeyCallback(GLFWwindow* window, int key, int scancode, int action, 
                 glfwSetWindowShouldClose(g_mainWindow, GL_TRUE);
                 break;
             case GLFW_KEY_TAB:      // Toggle UI visibility
-                g_debugDraw.m_showUI = !g_debugDraw.m_showUI;
+                g_settings.m_showUI = !g_settings.m_showUI;
                 break;
             default:
                 break;
@@ -392,7 +394,7 @@ int main(int, char**)
 
         ImGui::NewFrame();
 
-        if (g_debugDraw.m_showUI)
+        if (g_settings.m_showUI)
         {
             ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
             ImGui::SetNextWindowSize(ImVec2(float(windowWidth), float(windowHeight)));
@@ -403,22 +405,22 @@ int main(int, char**)
 
         sUpdateCamera(0.1f);
 
-        if (g_debugDraw.m_drawBVH)
+        if (g_settings.m_drawBVH)
         {
             ysDrawInputBVH input;
             input.debugDraw = &g_debugDraw;
-            input.depth = g_debugDraw.m_drawBVHDepth;
+            input.depth = g_settings.m_drawBVHDepth;
             ysScene_DebugDrawBVH(s_scene, &input);
         }
 
-        if (g_debugDraw.m_drawGeo)
+        if (g_settings.m_drawGeo)
         {
             ysDrawInputGeo input;
             input.debugDraw = &g_debugDraw;
             ysScene_DebugDrawGeo(s_scene, &input);
         }
 
-        if (g_debugDraw.m_drawRender)
+        if (g_settings.m_drawRender)
         {
             Texture2D tex;
             tex.m_pixels = s_pixels.GetEntries();

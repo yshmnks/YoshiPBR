@@ -2,10 +2,14 @@ project(testbed LANGUAGES CXX)
 
 set (TESTBED_SOURCE_FILES
 	main.cpp
+    camera.cpp
+    camera.h
     draw.cpp
     draw.h
 	scenePreview.cpp
 	scenePreview.h
+    settings.cpp
+    settings.h
 	imgui_impl_glfw.cpp
 	imgui_impl_glfw.h
 	imgui_impl_opengl3.cpp
