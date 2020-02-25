@@ -563,7 +563,7 @@ void ysBVH::Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_in
         ysAssert(m_nodes[0].m_right == ys_nullIndex || (0 < m_nodes[0].m_right && m_nodes[0].m_right < m_nodeCount));
         ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_right == ys_nullIndex));
         ysAssert(m_nodes[0].m_left == ys_nullIndex || m_nodes[0].m_left != m_nodes[0].m_right);
-        //ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
+        ysAssert((m_nodes[0].m_left == ys_nullIndex) == (m_nodes[0].m_shapeId != ys_nullShapeId));
         for (ys_int32 i = 1; i < m_nodeCount; ++i)
         {
             const Node* node = m_nodes + i;
@@ -571,7 +571,7 @@ void ysBVH::Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_in
             ysAssert(node->m_right == ys_nullIndex || (i < node->m_right && node->m_right < m_nodeCount));
             ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
             ysAssert(node->m_left == ys_nullIndex || node->m_left != node->m_right);
-            //ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
+            ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
             ysAssert(0 <= node->m_parent && node->m_parent < i);
             const Node* parent = m_nodes + node->m_parent;
             ysAssert(parent->m_aabb.Contains(node->m_aabb));
@@ -613,7 +613,7 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const 
         ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
         if (node->m_left != ys_nullIndex)
         {
-            //ysAssert(node->m_shapeId == ys_nullShapeId);
+            ysAssert(node->m_shapeId == ys_nullShapeId);
             nodeIndexStack[stackCount] = node->m_left;
             stackCount++;
             nodeIndexStack[stackCount] = node->m_right;
@@ -621,7 +621,7 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const 
         }
         else
         {
-            //ysAssert(node->m_shapeId != ys_nullShapeId);
+            ysAssert(node->m_shapeId != ys_nullShapeId);
             const ysShape& shape = scene->m_shapes[node->m_shapeId.m_index];
             ysRayCastOutput rco;
             bool hit = shape.RayCast(scene, &rco, rci);
