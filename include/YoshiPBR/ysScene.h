@@ -4,6 +4,8 @@
 #include "YoshiPBR/ysBVH.h"
 
 struct ysDrawInputGeo;
+struct ysMaterial;
+struct ysMaterialStandard;
 struct ysRayCastInput;
 struct ysRayCastOutput;
 struct ysSceneDef;
@@ -33,4 +35,10 @@ struct ysScene
 
     ysTriangle* m_triangles;
     ys_int32 m_triangleCount;
+
+    ysMaterial* m_materials;
+    ys_int32 m_materialCount;
+
+    ysMaterialStandard* m_materialStandards;
+    ys_int32 m_materialStandardCount;
 };

@@ -12,8 +12,12 @@ void ysScene::Reset()
     m_bvh.Reset();
     m_shapes = nullptr;
     m_triangles = nullptr;
+    m_materials = nullptr;
+    m_materialStandards = nullptr;
     m_shapeCount = 0;
     m_triangleCount = 0;
+    m_materialCount = 0;
+    m_materialStandardCount = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
