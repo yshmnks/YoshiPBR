@@ -365,7 +365,7 @@ struct ysBVHBuilder
                 = mergedAABBSpan.x * mergedAABBSpan.y
                 + mergedAABBSpan.y * mergedAABBSpan.z
                 + mergedAABBSpan.z * mergedAABBSpan.x;
-            ys_float32 cost = ys_float32(clusterA->m_primCount * clusterB->m_primCount) * mergedAABBArea;
+            ys_float32 cost = mergedAABBArea;
             if (cost < clusterA->m_bestCost)
             {
                 clusterA->m_bestCost = cost;
