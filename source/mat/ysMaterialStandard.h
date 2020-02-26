@@ -8,4 +8,6 @@ struct ysMaterialStandard
 
     ysVec4 m_albedoDiffuse;
     ysVec4 m_albedoSpecular;
+
+    ysVec4 m_emissiveDiffuse;
 };

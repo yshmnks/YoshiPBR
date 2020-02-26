@@ -1,6 +1,7 @@
 #include "YoshiPBR/ysScene.h"
 #include "YoshiPBR/ysDebugDraw.h"
 #include "mat/ysMaterial.h"
+#include "mat/ysMaterialStandard.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
@@ -31,6 +32,18 @@ void ysScene::Create(const ysSceneDef* def)
     m_triangleCount = def->m_triangleCount;
     m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
 
+    m_materialCount = def->m_materialStandardCount;
+    m_materials = static_cast<ysMaterial*>(ysMalloc(sizeof(ysMaterial) * m_materialCount));
+
+    m_materialStandardCount = def->m_materialStandardCount;
+    m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
+
+    ys_int32 materialStandardStartIdx = 0;
+
+    ////////////
+    // Shapes //
+    ////////////
+
     ys_int32 shapeIdx = 0;
 
     ysAABB* aabbs = static_cast<ysAABB*>(ysMalloc(sizeof(ysAABB) * m_shapeCount));
@@ -40,19 +53,29 @@ void ysScene::Create(const ysSceneDef* def)
     {
         ysTriangle* dstTriangle = m_triangles + i;
         const ysInputTriangle* srcTriangle = def->m_triangles + i;
-        dstTriangle->m_v[0] = srcTriangle->vertices[0];
-        dstTriangle->m_v[1] = srcTriangle->vertices[1];
-        dstTriangle->m_v[2] = srcTriangle->vertices[2];
+        dstTriangle->m_v[0] = srcTriangle->m_vertices[0];
+        dstTriangle->m_v[1] = srcTriangle->m_vertices[1];
+        dstTriangle->m_v[2] = srcTriangle->m_vertices[2];
         ysVec4 ab = dstTriangle->m_v[1] - dstTriangle->m_v[0];
         ysVec4 ac = dstTriangle->m_v[2] - dstTriangle->m_v[0];
         ysVec4 ab_x_ac = ysCross(ab, ac);
         dstTriangle->m_n = ysIsSafeToNormalize3(ab_x_ac) ? ysNormalize3(ab_x_ac) : ysVec4_zero;
         //triangle->m_t = TODO;
-        dstTriangle->m_twoSided = srcTriangle->twoSided;
+        dstTriangle->m_twoSided = srcTriangle->m_twoSided;
 
         ysShape* shape = m_shapes + shapeIdx;
         shape->m_type = ysShape::Type::e_triangle;
         shape->m_typeIndex = i;
+
+        switch (srcTriangle->m_materialType)            
+        {
+            case ysMaterialType::e_standard:
+                shape->m_materialId.m_index = materialStandardStartIdx + srcTriangle->m_materialTypeIndex;
+                break;
+            default:
+                ysAssert(false);
+                break;
+        }
 
         aabbs[shapeIdx] = dstTriangle->ComputeAABB();
         shapeIds[shapeIdx].m_index = shapeIdx;
@@ -63,6 +86,27 @@ void ysScene::Create(const ysSceneDef* def)
     m_bvh.Create(aabbs, shapeIds, m_shapeCount);
     ysFree(shapeIds);
     ysFree(aabbs);
+
+    ///////////////
+    // Materials //
+    ///////////////
+
+    ys_int32 materialIdx = 0;
+
+    for (ys_int32 i = 0; i < m_materialStandardCount; ++i, ++materialIdx)
+    {
+        ysMaterialStandard* dst = m_materialStandards + i;
+        const ysMaterialStandardDef* src = def->m_materialStandards + i;
+        dst->m_albedoDiffuse = src->m_albedoDiffuse;
+        dst->m_albedoSpecular = src->m_albedoSpecular;
+        dst->m_emissiveDiffuse = src->m_emissiveDiffuse;
+
+        ysMaterial* material = m_materials + materialIdx;
+        material->m_type = ysMaterial::Type::e_standard;
+        material->m_typeIndex = i;
+    }
+
+    ysAssert(materialIdx == m_materialCount);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,8 +116,12 @@ void ysScene::Destroy()
     m_bvh.Destroy();
     ysFree(m_shapes);
     ysFree(m_triangles);
+    ysFree(m_materials);
+    ysFree(m_materialStandards);
     m_shapeCount = 0;
     m_triangleCount = 0;
+    m_materialCount = 0;
+    m_materialStandardCount = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
