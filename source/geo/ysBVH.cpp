@@ -590,10 +590,13 @@ void ysBVH::Destroy()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const ysRayCastInput& input) const
+bool ysBVH::RayCastClosest(const ysScene* scene, ysSceneRayCastOutput* output, const ysSceneRayCastInput& input) const
 {
     bool anyHit = false;
-    ysRayCastInput rci = input;
+    ysRayCastInput rci;
+    rci.m_origin = input.m_origin;
+    rci.m_direction = input.m_direction;
+    rci.m_maxLambda = input.m_maxLambda;
 
     const ys_int32 k_stackSize = 256;
     ysAssert(m_depth < k_stackSize);
@@ -604,7 +607,10 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const 
     {
         stackCount--;
         const Node* node = m_nodes + nodeIndexStack[stackCount];
-        bool rayIntersectsNode = node->m_aabb.IntersectsRay(rci.m_ray, rci.m_maxLambda);
+        ysRay ray;
+        ray.m_origin = rci.m_origin;
+        ray.m_direction = rci.m_direction;
+        bool rayIntersectsNode = node->m_aabb.IntersectsRay(ray, rci.m_maxLambda);
         if (rayIntersectsNode == false)
         {
             continue;
@@ -628,7 +634,10 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysRayCastOutput* output, const 
             if (hit)
             {
                 rci.m_maxLambda = rco.m_lambda;
-                *output = rco;
+                output->m_hitPoint = rco.m_hitPoint;
+                output->m_hitNormal = rco.m_hitNormal;
+                output->m_lambda = rco.m_lambda;
+                output->m_shapeId = node->m_shapeId;
                 anyHit = true;
             }
         }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "YoshiPBR/ysTypes.h"
+#include "YoshiPBR/ysStructures.h"
 
 struct ysRayCastInput;
 struct ysRayCastOutput;
@@ -19,4 +19,6 @@ struct ysShape
 
     Type m_type;
     ys_int32 m_typeIndex;
+
+    ysMaterialId m_materialId;
 };

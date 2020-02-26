@@ -9,8 +9,11 @@ struct ysMaterialStandard;
 struct ysRayCastInput;
 struct ysRayCastOutput;
 struct ysSceneDef;
+struct ysSceneRayCastInput;
+struct ysSceneRayCastOutput;
 struct ysSceneRenderInput;
 struct ysSceneRenderOutput;
+struct ysRay;
 struct ysShape;
 struct ysTriangle;
 
@@ -22,7 +25,9 @@ struct ysScene
     void Create(const ysSceneDef*);
     void Destroy();
 
-    bool RayCastClosest(ysRayCastOutput*, const ysRayCastInput&) const;
+    bool RayCastClosest(ysSceneRayCastOutput*, const ysSceneRayCastInput&) const;
+
+    ysVec4 SampleRadiance(const ysRay&, ys_int32 maxBounceCount) const;
 
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const;
 

@@ -1,5 +1,6 @@
 #include "YoshiPBR/ysScene.h"
 #include "YoshiPBR/ysDebugDraw.h"
+#include "mat/ysMaterial.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
@@ -77,9 +78,32 @@ void ysScene::Destroy()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool ysScene::RayCastClosest(ysRayCastOutput* output, const ysRayCastInput& input) const
+bool ysScene::RayCastClosest(ysSceneRayCastOutput* output, const ysSceneRayCastInput& input) const
 {
     return m_bvh.RayCastClosest(this, output, input);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::SampleRadiance(const ysRay& ray, ys_int32 maxBounceCount) const
+{
+    ysSceneRayCastInput rci;
+    rci.m_maxLambda = ys_maxFloat;
+    rci.m_origin = ray.m_origin;
+    rci.m_direction = ray.m_direction;
+    ysSceneRayCastOutput rco;
+    bool hit = m_bvh.RayCastClosest(this, &rco, rci);
+    if (hit == false)
+    {
+        return ysVec4_zero;
+    }
+    const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
+    const ysMaterial* material = m_materials + shape->m_materialId.m_index;
+
+    for (ys_int32 i = 0; i < maxBounceCount; ++i)
+    {
+
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,12 +131,12 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
             ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
             ysVec4 pixelDirWS = ysRotate(input->m_eye.q, pixelDirLS);
 
-            ysRayCastInput rci;
+            ysSceneRayCastInput rci;
             rci.m_maxLambda = ys_maxFloat;
-            rci.m_ray.m_direction = pixelDirWS;
-            rci.m_ray.m_origin = input->m_eye.p;
+            rci.m_direction = pixelDirWS;
+            rci.m_origin = input->m_eye.p;
 
-            ysRayCastOutput rco;
+            ysSceneRayCastOutput rco;
             bool hit = RayCastClosest(&rco, rci);
             if (hit)
             {

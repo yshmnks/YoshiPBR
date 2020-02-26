@@ -1,7 +1,7 @@
 #pragma once
 
-#include "YoshiPBR/ysMath.h"
 #include "YoshiPBR/ysArrayG.h"
+#include "YoshiPBR/ysMath.h"
 
 struct ysDebugDraw;
 
@@ -59,10 +59,12 @@ struct ysSceneRayCastInput
     {
         m_origin = ysVec4_zero;
         m_direction = ysVec4_unitZ;
+        m_maxLambda = ys_maxFloat;
     }
 
     ysVec4 m_origin;
     ysVec4 m_direction;
+    ys_float32 m_maxLambda;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +87,7 @@ struct ysSceneRenderInput
         m_fovY = 0.0f;
         m_pixelCountX = 0;
         m_pixelCountY = 0;
+        m_maxBounceCount = 0;
     }
 
     // For identity-eye-orientation, the eye looks down the -z axis (such that the x axis points right and y axis points up).
@@ -96,6 +99,9 @@ struct ysSceneRenderInput
     // Pixels are assumed to be "square,"  so the horizontal (x) fov is inferred from the pixel count aspect ratio.
     ys_int32 m_pixelCountX;
     ys_int32 m_pixelCountY;
+
+    // 0 is direct illumination only.
+    ys_int32 m_maxBounceCount;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
