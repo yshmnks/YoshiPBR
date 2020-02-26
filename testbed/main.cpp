@@ -290,53 +290,60 @@ static void sCreateScene()
         }
     }
 
-    ysInputTriangle triangles[5][2];
+    ysInputTriangle triangles[11];
     ys_int32 wallIdx = 0;
-    triangles[wallIdx][0].m_vertices[0] = corners[0][0][0];
-    triangles[wallIdx][0].m_vertices[1] = corners[1][0][0];
-    triangles[wallIdx][0].m_vertices[2] = corners[1][1][0];
-    triangles[wallIdx][1].m_vertices[0] = corners[0][0][0];
-    triangles[wallIdx][1].m_vertices[1] = corners[1][1][0];
-    triangles[wallIdx][1].m_vertices[2] = corners[0][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[1][1][0];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][0];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][1][0];
     wallIdx++;
-    triangles[wallIdx][0].m_vertices[0] = corners[1][1][1];
-    triangles[wallIdx][0].m_vertices[1] = corners[1][0][1];
-    triangles[wallIdx][0].m_vertices[2] = corners[0][0][1];
-    triangles[wallIdx][1].m_vertices[0] = corners[0][1][1];
-    triangles[wallIdx][1].m_vertices[1] = corners[1][1][1];
-    triangles[wallIdx][1].m_vertices[2] = corners[0][0][1];
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[1][1][1];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][0][1];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[0][0][1];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][0][1];
     wallIdx++;
-    triangles[wallIdx][0].m_vertices[0] = corners[0][0][0];
-    triangles[wallIdx][0].m_vertices[1] = corners[0][1][0];
-    triangles[wallIdx][0].m_vertices[2] = corners[0][1][1];
-    triangles[wallIdx][1].m_vertices[0] = corners[0][0][0];
-    triangles[wallIdx][1].m_vertices[1] = corners[0][1][1];
-    triangles[wallIdx][1].m_vertices[2] = corners[0][0][1];
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[0][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[0][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[0][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][0][1];
     wallIdx++;
-    triangles[wallIdx][0].m_vertices[0] = corners[1][1][1];
-    triangles[wallIdx][0].m_vertices[1] = corners[1][1][0];
-    triangles[wallIdx][0].m_vertices[2] = corners[1][0][0];
-    triangles[wallIdx][1].m_vertices[0] = corners[1][0][1];
-    triangles[wallIdx][1].m_vertices[1] = corners[1][1][1];
-    triangles[wallIdx][1].m_vertices[2] = corners[1][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[1][1][1];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[1][0][0];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[1][0][1];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[1][0][0];
     wallIdx++;
-    triangles[wallIdx][0].m_vertices[0] = corners[0][1][0];
-    triangles[wallIdx][0].m_vertices[1] = corners[1][1][0];
-    triangles[wallIdx][0].m_vertices[2] = corners[1][1][1];
-    triangles[wallIdx][1].m_vertices[0] = corners[0][1][0];
-    triangles[wallIdx][1].m_vertices[1] = corners[1][1][1];
-    triangles[wallIdx][1].m_vertices[2] = corners[0][1][1];
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][1][0];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][1][1];
     wallIdx++;
 
     for (ys_int32 i = 0; i < 5; ++i)
     {
-        triangles[i][0].m_twoSided = false;
-        triangles[i][1].m_twoSided = false;
-        triangles[i][0].m_materialType = ysMaterialType::e_standard;
-        triangles[i][1].m_materialType = ysMaterialType::e_standard;
-        triangles[i][0].m_materialTypeIndex = 0;
-        triangles[i][1].m_materialTypeIndex = 0;
+        triangles[2 * i + 0].m_twoSided = false;
+        triangles[2 * i + 1].m_twoSided = false;
+        triangles[2 * i + 0].m_materialType = ysMaterialType::e_standard;
+        triangles[2 * i + 1].m_materialType = ysMaterialType::e_standard;
+        triangles[2 * i + 0].m_materialTypeIndex = 0;
+        triangles[2 * i + 1].m_materialTypeIndex = 0;
     }
+
+    triangles[10].m_vertices[0] = ysVecSet(0.0f, -0.25f, 0.75f) * ysSplat(h);
+    triangles[10].m_vertices[1] = ysVecSet(-0.25f, 0.25f, 0.75f) * ysSplat(h);
+    triangles[10].m_vertices[2] = ysVecSet(0.25f, 0.25f, 0.75f) * ysSplat(h);
+    triangles[10].m_twoSided = false;
+    triangles[10].m_materialType = ysMaterialType::e_standard;
+    triangles[10].m_materialTypeIndex = 1;
 
     ysMaterialStandardDef materialStandards[2];
     materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
@@ -347,9 +354,9 @@ static void sCreateScene()
     materialStandards[1].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
     ysSceneDef sceneDef;
-    sceneDef.m_triangles = &triangles[0][0];
-    sceneDef.m_triangleCount = 10;
-    sceneDef.m_materialStandards = &materialStandards[0];
+    sceneDef.m_triangles = triangles;
+    sceneDef.m_triangleCount = 11;
+    sceneDef.m_materialStandards = materialStandards;
     sceneDef.m_materialStandardCount = 2;
 
     s_scene = ysScene_Create(&sceneDef);
