@@ -130,6 +130,7 @@ void ysScene::Create(const ysSceneDef* def)
     {
         ysLightPoint* dst = m_lightPoints + i;
         const ysLightPointDef* src = def->m_lightPoints + i;
+        dst->m_position = src->m_position;
         dst->m_radiantIntensity = src->m_radiantIntensity;
 
         ysLight* light = m_lights + lightIdx;
@@ -149,10 +150,14 @@ void ysScene::Destroy()
     ysFree(m_triangles);
     ysFree(m_materials);
     ysFree(m_materialStandards);
+    ysFree(m_lights);
+    ysFree(m_lightPoints);
     m_shapeCount = 0;
     m_triangleCount = 0;
     m_materialCount = 0;
     m_materialStandardCount = 0;
+    m_lightCount = 0;
+    m_lightPointCount = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
