@@ -126,12 +126,13 @@ void ysScene::Create(const ysSceneDef* def)
 
     ys_int32 lightIdx = 0;
 
+    ysVec4 invSphereRadians = ysSplat(0.25f / ys_pi);
     for (ys_int32 i = 0; i < m_lightPointCount; ++i, ++lightIdx)
     {
         ysLightPoint* dst = m_lightPoints + i;
         const ysLightPointDef* src = def->m_lightPoints + i;
         dst->m_position = src->m_position;
-        dst->m_radiantIntensity = src->m_radiantIntensity;
+        dst->m_radiantIntensity = src->m_wattage * invSphereRadians;
 
         ysLight* light = m_lights + lightIdx;
         light->m_type = ysLight::Type::e_point;
@@ -258,7 +259,7 @@ void ysScene::DebugDrawGeo(const ysDrawInputGeo* input) const
     colors[0] = Color(1.0f, 0.0f, 0.0f);
     for (ys_int32 i = 0; i < m_triangleCount; ++i)
     {
-        ysTriangle* triangle = m_triangles + i;
+        const ysTriangle* triangle = m_triangles + i;
         input->debugDraw->DrawTriangleList(triangle->m_v, colors, 1);
         if (triangle->m_twoSided)
         {
@@ -277,6 +278,22 @@ void ysScene::DebugDrawGeo(const ysDrawInputGeo* input) const
         c[1] = c[0];
         c[2] = c[1];
         input->debugDraw->DrawSegmentList(&segments[0][0], c, 3);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysScene::DebugDrawLights(const ysDrawInputLights* input) const
+{
+    Color wireFrameColor = Color(1.0f, 1.0f, 1.0f);
+    for (ys_int32 i = 0; i < m_lightPointCount; ++i)
+    {
+        const ysLightPoint* light = m_lightPoints + i;
+        ysTransform xf;
+        xf.q = ysQuat_identity;
+        xf.p = light->m_position;
+        ysVec4 halfDims = ysSplat(0.25f);
+        input->debugDraw->DrawWireEllipsoid(halfDims, xf, wireFrameColor);
     }
 }
 
@@ -323,4 +340,11 @@ void ysScene_DebugDrawBVH(const ysScene* scene, const ysDrawInputBVH* input)
 void ysScene_DebugDrawGeo(const ysScene* scene, const ysDrawInputGeo* input)
 {
     scene->DebugDrawGeo(input);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysScene_DebugDrawLights(const ysScene* scene, const ysDrawInputLights* input)
+{
+    scene->DebugDrawLights(input);
 }

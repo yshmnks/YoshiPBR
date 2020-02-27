@@ -34,6 +34,7 @@ struct ysScene
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const;
 
     void DebugDrawGeo(const ysDrawInputGeo*) const;
+    void DebugDrawLights(const ysDrawInputLights*) const;
 
     ysBVH m_bvh;
 

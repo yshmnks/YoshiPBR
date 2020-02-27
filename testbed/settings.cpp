@@ -7,8 +7,9 @@ TestbedSettings g_settings;
 TestbedSettings::TestbedSettings()
 {
     m_showUI = true;
-    m_drawBVH = true;
+    m_drawBVH = false;
     m_drawGeo = true;
+    m_drawLights = true;
     m_drawRender = true;
     m_drawBVHDepth = -1;
 

@@ -90,6 +90,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImGui::Separator();
 
                 ImGui::Checkbox("Draw Geo", &g_settings.m_drawGeo);
+                ImGui::Checkbox("Draw Lights", &g_settings.m_drawLights);
                 ImGui::Checkbox("Draw BVH", &g_settings.m_drawBVH);
                 ImGui::SameLine();
                 ImGui::SliderInt("Depth", &g_settings.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
@@ -353,11 +354,17 @@ static void sCreateScene()
     materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[1].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
+    ysLightPointDef lightPoints[1];
+    lightPoints[0].m_position = ysVecSet(0.0f, 0.75f, 0.0f) * ysSplat(h);
+    lightPoints[0].m_wattage = ysSplat(60.0f);
+
     ysSceneDef sceneDef;
     sceneDef.m_triangles = triangles;
     sceneDef.m_triangleCount = 11;
     sceneDef.m_materialStandards = materialStandards;
     sceneDef.m_materialStandardCount = 2;
+    sceneDef.m_lightPoints = lightPoints;
+    sceneDef.m_lightPointCount = 1;
 
     s_scene = ysScene_Create(&sceneDef);
 }
@@ -470,6 +477,13 @@ int main(int, char**)
             ysDrawInputGeo input;
             input.debugDraw = &g_debugDraw;
             ysScene_DebugDrawGeo(s_scene, &input);
+        }
+
+        if (g_settings.m_drawLights)
+        {
+            ysDrawInputLights input;
+            input.debugDraw = &g_debugDraw;
+            ysScene_DebugDrawLights(s_scene, &input);
         }
 
         if (g_settings.m_drawRender)
