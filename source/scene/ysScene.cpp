@@ -1,5 +1,7 @@
 #include "YoshiPBR/ysScene.h"
 #include "YoshiPBR/ysDebugDraw.h"
+#include "light/ysLight.h"
+#include "light/ysLightPoint.h"
 #include "mat/ysMaterial.h"
 #include "mat/ysMaterialStandard.h"
 #include "YoshiPBR/ysRay.h"
@@ -16,10 +18,14 @@ void ysScene::Reset()
     m_triangles = nullptr;
     m_materials = nullptr;
     m_materialStandards = nullptr;
+    m_lights = nullptr;
+    m_lightPoints = nullptr;
     m_shapeCount = 0;
     m_triangleCount = 0;
     m_materialCount = 0;
     m_materialStandardCount = 0;
+    m_lightCount = 0;
+    m_lightPointCount = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,6 +43,12 @@ void ysScene::Create(const ysSceneDef* def)
 
     m_materialStandardCount = def->m_materialStandardCount;
     m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
+
+    m_lightCount = def->m_lightPointCount;
+    m_lights = static_cast<ysLight*>(ysMalloc(sizeof(ysLight) * m_lightCount));
+
+    m_lightPointCount = def->m_lightPointCount;
+    m_lightPoints = static_cast<ysLightPoint*>(ysMalloc(sizeof(ysLightPoint) * m_lightPointCount));
 
     ys_int32 materialStandardStartIdx = 0;
 
@@ -107,6 +119,25 @@ void ysScene::Create(const ysSceneDef* def)
     }
 
     ysAssert(materialIdx == m_materialCount);
+
+    ////////////
+    // Lights //
+    ////////////
+
+    ys_int32 lightIdx = 0;
+
+    for (ys_int32 i = 0; i < m_lightPointCount; ++i, ++lightIdx)
+    {
+        ysLightPoint* dst = m_lightPoints + i;
+        const ysLightPointDef* src = def->m_lightPoints + i;
+        dst->m_radiantIntensity = src->m_radiantIntensity;
+
+        ysLight* light = m_lights + lightIdx;
+        light->m_type = ysLight::Type::e_point;
+        light->m_typeIndex = i;
+    }
+
+    ysAssert(lightIdx == m_lightCount);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

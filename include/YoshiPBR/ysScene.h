@@ -4,6 +4,8 @@
 #include "YoshiPBR/ysBVH.h"
 
 struct ysDrawInputGeo;
+struct ysLight;
+struct ysLightPoint;
 struct ysMaterial;
 struct ysMaterialStandard;
 struct ysRayCastInput;
@@ -46,4 +48,10 @@ struct ysScene
 
     ysMaterialStandard* m_materialStandards;
     ys_int32 m_materialStandardCount;
+
+    ysLight* m_lights;
+    ys_int32 m_lightCount;
+
+    ysLightPoint* m_lightPoints;
+    ys_int32 m_lightPointCount;
 };
