@@ -6,3 +6,16 @@ ysVec4 ysMaterialStandard::EvaluateBRDF(const ysVec4& incomingDirectionLS, const
 {
     return m_albedoDiffuse / ysVec4_2pi;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysMaterialStandard::GenerateRandomDirection(ysVec4* outgoingLS, ys_float32* probabilityDensity, const ysVec4& incomingLS) const
+{
+    ys_float32 u = (ys_float32)std::rand() / RAND_MAX;
+    ys_float32 v = (ys_float32)std::rand() / RAND_MAX;
+    ys_float32 phi = ys_2pi * u;
+    ys_float32 cosTheta = v;
+    ys_float32 sinTheta = sqrtf(ysMax(0.0f, 1.0f - cosTheta * cosTheta));
+    *outgoingLS = ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
+    *probabilityDensity = 1.0f / ys_2pi;
+}

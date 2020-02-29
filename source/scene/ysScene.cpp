@@ -184,6 +184,9 @@ ysVec4 ysScene::SampleRadiance(const ysRay& ray, ys_int32 maxBounceCount) const
     }
     const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
     const ysMaterial* material = m_materials + shape->m_materialId.m_index;
+    ysVec4 direction;
+    ys_float32 probDens;
+    //material->GenerateRandomDirection(this, &direction, &probDens, );
 
     for (ys_int32 i = 0; i < maxBounceCount; ++i)
     {

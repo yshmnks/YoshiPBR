@@ -17,6 +17,10 @@ struct ysMaterial
     // Directions are in the local space of the surface element with [xHat, yHat, zHat] = [tangent, bitangnet, normal]
     ysVec4 EvaluateBRDF(const ysScene* scene, const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
+    // TODO: Include w.n term in the rendering equation's integrand as part of the importance sampling
+    void GenerateRandomDirection(const ysScene* scene,
+        ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
+
     Type m_type;
     ys_int32 m_typeIndex;
 };

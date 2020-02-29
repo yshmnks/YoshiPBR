@@ -8,6 +8,8 @@ struct ysMaterialStandard
 {
     ysVec4 EvaluateBRDF(const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
+    void GenerateRandomDirection(ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
+
     ysVec4 m_albedoDiffuse;
     ysVec4 m_albedoSpecular;
 
