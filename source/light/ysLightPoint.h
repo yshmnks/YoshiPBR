@@ -1,17 +1,13 @@
-#include "settings.h"
+#pragma once
 
-TestbedSettings g_settings;
+#include "YoshiPBR/ysMath.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-TestbedSettings::TestbedSettings()
+struct ysLightPoint
 {
-    m_showUI = true;
-    m_drawBVH = false;
-    m_drawGeo = true;
-    m_drawLights = true;
-    m_drawRender = true;
-    m_drawBVHDepth = -1;
+    ysVec4 m_position;
 
-    m_moveSpeed = 8.0f;
-}
+    // Watts per radian (uniformly distributed over the sphere)
+    ysVec4 m_radiantIntensity;
+};

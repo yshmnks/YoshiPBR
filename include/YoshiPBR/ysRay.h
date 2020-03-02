@@ -1,6 +1,6 @@
 #pragma once
 
-#include "YoshiPBR/ysMath.h"
+#include "YoshiPBR/ysStructures.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,11 +18,13 @@ struct ysRayCastInput
 {
     ysRayCastInput()
     {
-        m_ray.Reset();
+        m_origin = ysVec4_zero;
+        m_direction = ysVec4_unitZ;
         m_maxLambda = ys_maxFloat;
     }
 
-    ysRay m_ray;
+    ysVec4 m_origin;
+    ysVec4 m_direction;
     ys_float32 m_maxLambda;
 };
 
@@ -32,5 +34,6 @@ struct ysRayCastOutput
 {
     ysVec4 m_hitPoint;
     ysVec4 m_hitNormal;
+    ysVec4 m_hitTangent;
     ys_float32 m_lambda; // hitpoint = origin + lambda * direction
 };

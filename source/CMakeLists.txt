@@ -7,6 +7,14 @@ set(YOSHIPBR_SOURCE_FILES
     geo/ysRay.cpp
     geo/ysShape.cpp
     geo/ysTriangle.cpp
+    light/ysLight.cpp
+    light/ysLight.h
+    light/ysLightPoint.cpp
+    light/ysLightPoint.h
+    mat/ysMaterial.cpp
+    mat/ysMaterial.h
+    mat/ysMaterialStandard.cpp
+    mat/ysMaterialStandard.h
     scene/ysScene.cpp
     )
 

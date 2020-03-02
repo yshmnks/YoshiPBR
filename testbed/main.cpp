@@ -90,6 +90,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImGui::Separator();
 
                 ImGui::Checkbox("Draw Geo", &g_settings.m_drawGeo);
+                ImGui::Checkbox("Draw Lights", &g_settings.m_drawLights);
                 ImGui::Checkbox("Draw BVH", &g_settings.m_drawBVH);
                 ImGui::SameLine();
                 ImGui::SliderInt("Depth", &g_settings.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
@@ -118,6 +119,9 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                         s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, 1.0f);
                     }
                 }
+
+                ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 8);
+
                 ImGui::Separator();
 
                 if (ImGui::Button("Quit", button_sz))
@@ -274,40 +278,96 @@ static void sUpdateCamera(ys_float32 moveDistance)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sCreateScene()
 {
-    const ys_int32 n = 24;
-    ysInputTriangle triangles[n][n][n];
-    for (ys_int32 i = 0; i < n; ++i)
+    const ys_float32 h = 4.0f;
+    ysVec4 corners[2][2][2];
+    for (ys_int32 i = 0; i < 2; ++i)
     {
-        for (ys_int32 j = 0; j < n; ++j)
+        ys_float32 x = 2.0f * i - 1.0f;
+        for (ys_int32 j = 0; j < 2; ++j)
         {
-            for (ys_int32 k = 0; k < n; ++k)
+            ys_float32 y = 2.0f * j - 1.0f;
+            for (ys_int32 k = 0; k < 2; ++k)
             {
-                ysInputTriangle* triangle = &triangles[i][j][k];
-                triangle->vertices[0] = ysVecSet(-0.25f, -0.25f, -0.25f);
-                triangle->vertices[1] = ysVecSet(0.25f, -0.25f, -0.25f);
-                triangle->vertices[2] = ysVecSet(0.25f, 0.25f, 0.25f);
-#if 0
-                ysVec4 asdf = ysVecSet(ys_float32(i), ys_float32(j), ys_float32(k)) * ysSplat(1.0f);
-                triangle->vertices[0] = triangle->vertices[0] + asdf;
-                triangle->vertices[1] = triangle->vertices[1] + asdf;
-                triangle->vertices[2] = triangle->vertices[2] + asdf;
-#else
-                ysTransform xf;
-                xf.q = ysRandomQuat();
-                xf.p = ysRandom3(ysVec4_zero, ysSplat(ys_float32(n)) * ysVecSet(1.0f, 2.0f, 4.0f));
-                ysVec4 scale = ysRandom3(ysSplat(0.25f), ysSplat(4.0f));
-                triangle->vertices[0] = ysMul(xf, triangle->vertices[0] * scale);
-                triangle->vertices[1] = ysMul(xf, triangle->vertices[1] * scale);
-                triangle->vertices[2] = ysMul(xf, triangle->vertices[2] * scale);
-#endif
-                triangle->twoSided = true;
+                ys_float32 z = 2.0f * k - 1.0f;
+                corners[i][j][k] = ysVecSet(x, y, z) * ysSplat(h);
             }
         }
     }
 
+    ysInputTriangle triangles[11];
+    ys_int32 wallIdx = 0;
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[1][1][0];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][0];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][1][0];
+    wallIdx++;
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[1][1][1];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][0][1];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[0][0][1];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][0][1];
+    wallIdx++;
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[0][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[0][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][0][0];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[0][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][0][1];
+    wallIdx++;
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[1][1][1];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[1][0][0];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[1][0][1];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[1][0][0];
+    wallIdx++;
+    triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[1] = corners[1][1][0];
+    triangles[2 * wallIdx + 0].m_vertices[2] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[0] = corners[0][1][0];
+    triangles[2 * wallIdx + 1].m_vertices[1] = corners[1][1][1];
+    triangles[2 * wallIdx + 1].m_vertices[2] = corners[0][1][1];
+    wallIdx++;
+
+    for (ys_int32 i = 0; i < 5; ++i)
+    {
+        triangles[2 * i + 0].m_twoSided = false;
+        triangles[2 * i + 1].m_twoSided = false;
+        triangles[2 * i + 0].m_materialType = ysMaterialType::e_standard;
+        triangles[2 * i + 1].m_materialType = ysMaterialType::e_standard;
+        triangles[2 * i + 0].m_materialTypeIndex = 0;
+        triangles[2 * i + 1].m_materialTypeIndex = 0;
+    }
+
+    triangles[10].m_vertices[0] = ysVecSet(0.0f, -0.25f, 0.75f) * ysSplat(h);
+    triangles[10].m_vertices[1] = ysVecSet(-0.25f, 0.25f, 0.75f) * ysSplat(h);
+    triangles[10].m_vertices[2] = ysVecSet(0.25f, 0.25f, 0.75f) * ysSplat(h);
+    triangles[10].m_twoSided = false;
+    triangles[10].m_materialType = ysMaterialType::e_standard;
+    triangles[10].m_materialTypeIndex = 1;
+
+    ysMaterialStandardDef materialStandards[2];
+    materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
+    materialStandards[0].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
+    materialStandards[0].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
+    materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
+    materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
+    materialStandards[1].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
+
+    ysLightPointDef lightPoints[1];
+    lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.8f) * ysSplat(h);
+    lightPoints[0].m_wattage = ysSplat(60.0f);
+
     ysSceneDef sceneDef;
-    sceneDef.m_triangles = &triangles[0][0][0];
-    sceneDef.m_triangleCount = n * n * n;
+    sceneDef.m_triangles = triangles;
+    sceneDef.m_triangleCount = 11;
+    sceneDef.m_materialStandards = materialStandards;
+    sceneDef.m_materialStandardCount = 2;
+    sceneDef.m_lightPoints = lightPoints;
+    sceneDef.m_lightPointCount = 1;
 
     s_scene = ysScene_Create(&sceneDef);
 }
@@ -420,6 +480,13 @@ int main(int, char**)
             ysDrawInputGeo input;
             input.debugDraw = &g_debugDraw;
             ysScene_DebugDrawGeo(s_scene, &input);
+        }
+
+        if (g_settings.m_drawLights)
+        {
+            ysDrawInputLights input;
+            input.debugDraw = &g_debugDraw;
+            ysScene_DebugDrawLights(s_scene, &input);
         }
 
         if (g_settings.m_drawRender)

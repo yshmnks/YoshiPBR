@@ -1,7 +1,7 @@
 #pragma once
 
-#include "YoshiPBR/ysMath.h"
 #include "YoshiPBR/ysArrayG.h"
+#include "YoshiPBR/ysMath.h"
 
 struct ysDebugDraw;
 
@@ -27,14 +27,39 @@ bool operator!=(const ysShapeId&, const ysShapeId&);
 bool operator==(const ysMaterialId&, const ysMaterialId&);
 bool operator!=(const ysMaterialId&, const ysMaterialId&);
 
+enum struct ysMaterialType
+{
+    e_standard,
+};
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysInputTriangle
 {
     // A free-standing triangle
-    ysVec4 vertices[3];
-    ysMaterialId materialId;
-    bool twoSided;
+    ysVec4 m_vertices[3];
+    bool m_twoSided;
+
+    ysMaterialType m_materialType;
+    ys_int32 m_materialTypeIndex;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysMaterialStandardDef
+{
+    ysVec4 m_albedoDiffuse;
+    ysVec4 m_albedoSpecular;
+
+    ysVec4 m_emissiveDiffuse;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysLightPointDef
+{
+    ysVec4 m_position;
+    ysVec4 m_wattage;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,10 +70,22 @@ struct ysSceneDef
     {
         m_triangles = nullptr;
         m_triangleCount = 0;
+
+        m_materialStandards = nullptr;
+        m_materialStandardCount = 0;
+
+        m_lightPoints = nullptr;
+        m_lightPointCount = 0;
     }
 
     const ysInputTriangle* m_triangles;
     ys_int32 m_triangleCount;
+
+    const ysMaterialStandardDef* m_materialStandards;
+    ys_int32 m_materialStandardCount;
+
+    const ysLightPointDef* m_lightPoints;
+    ys_int32 m_lightPointCount;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,10 +96,12 @@ struct ysSceneRayCastInput
     {
         m_origin = ysVec4_zero;
         m_direction = ysVec4_unitZ;
+        m_maxLambda = ys_maxFloat;
     }
 
     ysVec4 m_origin;
     ysVec4 m_direction;
+    ys_float32 m_maxLambda;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,6 +110,7 @@ struct ysSceneRayCastOutput
 {
     ysVec4 m_hitPoint;
     ysVec4 m_hitNormal;
+    ysVec4 m_hitTangent;
     ys_float32 m_lambda;
     ysShapeId m_shapeId;
 };
@@ -85,6 +125,7 @@ struct ysSceneRenderInput
         m_fovY = 0.0f;
         m_pixelCountX = 0;
         m_pixelCountY = 0;
+        m_maxBounceCount = 0;
     }
 
     // For identity-eye-orientation, the eye looks down the -z axis (such that the x axis points right and y axis points up).
@@ -96,6 +137,9 @@ struct ysSceneRenderInput
     // Pixels are assumed to be "square,"  so the horizontal (x) fov is inferred from the pixel count aspect ratio.
     ys_int32 m_pixelCountX;
     ys_int32 m_pixelCountY;
+
+    // 0 is direct illumination only.
+    ys_int32 m_maxBounceCount;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,6 +175,18 @@ struct ysDrawInputBVH
 struct ysDrawInputGeo
 {
     ysDrawInputGeo()
+    {
+        debugDraw = nullptr;
+    }
+
+    ysDebugDraw* debugDraw;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysDrawInputLights
+{
+    ysDrawInputLights()
     {
         debugDraw = nullptr;
     }

@@ -1,24 +1,16 @@
 #pragma once
 
-#include "YoshiPBR/ysStructures.h"
-
-struct ysRayCastInput;
-struct ysRayCastOutput;
-struct ysScene;
+#include "YoshiPBR/ysTypes.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ysShape
+struct ysLight
 {
     enum Type
     {
-        e_triangle,
+        e_point
     };
-
-    bool RayCast(const ysScene* scene, ysRayCastOutput*, const ysRayCastInput&) const;
 
     Type m_type;
     ys_int32 m_typeIndex;
-
-    ysMaterialId m_materialId;
 };

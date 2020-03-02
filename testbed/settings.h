@@ -11,6 +11,7 @@ struct TestbedSettings
     bool m_showUI;
     bool m_drawBVH;
     bool m_drawGeo;
+    bool m_drawLights;
     bool m_drawRender;
     ys_int32 m_drawBVHDepth;
 

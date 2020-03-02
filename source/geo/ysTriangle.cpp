@@ -20,8 +20,8 @@ bool ysTriangle::RayCast(ysRayCastOutput* output, const ysRayCastInput& input) c
     //     O + tD = (1 - b1 - b2) * A + b1 * B + b2 * C
     // where (b0 = 1 - b1 - b2, b1, b2) are the barycentric coordinates of the intersection
 
-    const ysVec4& o = input.m_ray.m_origin;
-    const ysVec4& d = input.m_ray.m_direction;
+    const ysVec4& o = input.m_origin;
+    const ysVec4& d = input.m_direction;
 
     const ys_float32 dnTol = ys_epsilon;
     ys_float32 dn = ysDot3(d, m_n);
@@ -68,6 +68,7 @@ bool ysTriangle::RayCast(ysRayCastOutput* output, const ysRayCastInput& input) c
 
     output->m_hitPoint = p;
     output->m_hitNormal = n;
+    output->m_hitTangent = m_t;
     output->m_lambda = t;
 
     return true;

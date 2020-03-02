@@ -1,5 +1,9 @@
 #include "YoshiPBR/ysScene.h"
 #include "YoshiPBR/ysDebugDraw.h"
+#include "light/ysLight.h"
+#include "light/ysLightPoint.h"
+#include "mat/ysMaterial.h"
+#include "mat/ysMaterialStandard.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
@@ -12,8 +16,16 @@ void ysScene::Reset()
     m_bvh.Reset();
     m_shapes = nullptr;
     m_triangles = nullptr;
+    m_materials = nullptr;
+    m_materialStandards = nullptr;
+    m_lights = nullptr;
+    m_lightPoints = nullptr;
     m_shapeCount = 0;
     m_triangleCount = 0;
+    m_materialCount = 0;
+    m_materialStandardCount = 0;
+    m_lightCount = 0;
+    m_lightPointCount = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +38,24 @@ void ysScene::Create(const ysSceneDef* def)
     m_triangleCount = def->m_triangleCount;
     m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
 
+    m_materialCount = def->m_materialStandardCount;
+    m_materials = static_cast<ysMaterial*>(ysMalloc(sizeof(ysMaterial) * m_materialCount));
+
+    m_materialStandardCount = def->m_materialStandardCount;
+    m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
+
+    m_lightCount = def->m_lightPointCount;
+    m_lights = static_cast<ysLight*>(ysMalloc(sizeof(ysLight) * m_lightCount));
+
+    m_lightPointCount = def->m_lightPointCount;
+    m_lightPoints = static_cast<ysLightPoint*>(ysMalloc(sizeof(ysLightPoint) * m_lightPointCount));
+
+    ys_int32 materialStandardStartIdx = 0;
+
+    ////////////
+    // Shapes //
+    ////////////
+
     ys_int32 shapeIdx = 0;
 
     ysAABB* aabbs = static_cast<ysAABB*>(ysMalloc(sizeof(ysAABB) * m_shapeCount));
@@ -35,19 +65,29 @@ void ysScene::Create(const ysSceneDef* def)
     {
         ysTriangle* dstTriangle = m_triangles + i;
         const ysInputTriangle* srcTriangle = def->m_triangles + i;
-        dstTriangle->m_v[0] = srcTriangle->vertices[0];
-        dstTriangle->m_v[1] = srcTriangle->vertices[1];
-        dstTriangle->m_v[2] = srcTriangle->vertices[2];
+        dstTriangle->m_v[0] = srcTriangle->m_vertices[0];
+        dstTriangle->m_v[1] = srcTriangle->m_vertices[1];
+        dstTriangle->m_v[2] = srcTriangle->m_vertices[2];
         ysVec4 ab = dstTriangle->m_v[1] - dstTriangle->m_v[0];
         ysVec4 ac = dstTriangle->m_v[2] - dstTriangle->m_v[0];
         ysVec4 ab_x_ac = ysCross(ab, ac);
         dstTriangle->m_n = ysIsSafeToNormalize3(ab_x_ac) ? ysNormalize3(ab_x_ac) : ysVec4_zero;
-        //triangle->m_t = TODO;
-        dstTriangle->m_twoSided = srcTriangle->twoSided;
+        dstTriangle->m_t = ysIsSafeToNormalize3(ab) ? ysNormalize3(ab) : ysVec4_zero; // TODO...
+        dstTriangle->m_twoSided = srcTriangle->m_twoSided;
 
         ysShape* shape = m_shapes + shapeIdx;
         shape->m_type = ysShape::Type::e_triangle;
         shape->m_typeIndex = i;
+
+        switch (srcTriangle->m_materialType)            
+        {
+            case ysMaterialType::e_standard:
+                shape->m_materialId.m_index = materialStandardStartIdx + srcTriangle->m_materialTypeIndex;
+                break;
+            default:
+                ysAssert(false);
+                break;
+        }
 
         aabbs[shapeIdx] = dstTriangle->ComputeAABB();
         shapeIds[shapeIdx].m_index = shapeIdx;
@@ -58,6 +98,48 @@ void ysScene::Create(const ysSceneDef* def)
     m_bvh.Create(aabbs, shapeIds, m_shapeCount);
     ysFree(shapeIds);
     ysFree(aabbs);
+
+    ///////////////
+    // Materials //
+    ///////////////
+
+    ys_int32 materialIdx = 0;
+
+    for (ys_int32 i = 0; i < m_materialStandardCount; ++i, ++materialIdx)
+    {
+        ysMaterialStandard* dst = m_materialStandards + i;
+        const ysMaterialStandardDef* src = def->m_materialStandards + i;
+        dst->m_albedoDiffuse = src->m_albedoDiffuse;
+        dst->m_albedoSpecular = src->m_albedoSpecular;
+        dst->m_emissiveDiffuse = src->m_emissiveDiffuse;
+
+        ysMaterial* material = m_materials + materialIdx;
+        material->m_type = ysMaterial::Type::e_standard;
+        material->m_typeIndex = i;
+    }
+
+    ysAssert(materialIdx == m_materialCount);
+
+    ////////////
+    // Lights //
+    ////////////
+
+    ys_int32 lightIdx = 0;
+
+    ysVec4 invSphereRadians = ysSplat(0.25f / ys_pi);
+    for (ys_int32 i = 0; i < m_lightPointCount; ++i, ++lightIdx)
+    {
+        ysLightPoint* dst = m_lightPoints + i;
+        const ysLightPointDef* src = def->m_lightPoints + i;
+        dst->m_position = src->m_position;
+        dst->m_radiantIntensity = src->m_wattage * invSphereRadians;
+
+        ysLight* light = m_lights + lightIdx;
+        light->m_type = ysLight::Type::e_point;
+        light->m_typeIndex = i;
+    }
+
+    ysAssert(lightIdx == m_lightCount);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,15 +149,132 @@ void ysScene::Destroy()
     m_bvh.Destroy();
     ysFree(m_shapes);
     ysFree(m_triangles);
+    ysFree(m_materials);
+    ysFree(m_materialStandards);
+    ysFree(m_lights);
+    ysFree(m_lightPoints);
     m_shapeCount = 0;
     m_triangleCount = 0;
+    m_materialCount = 0;
+    m_materialStandardCount = 0;
+    m_lightCount = 0;
+    m_lightPointCount = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool ysScene::RayCastClosest(ysRayCastOutput* output, const ysRayCastInput& input) const
+bool ysScene::RayCastClosest(ysSceneRayCastOutput* output, const ysSceneRayCastInput& input) const
 {
     return m_bvh.RayCastClosest(this, output, input);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysScene::ysSurfaceData
+{
+    const ysShape* m_shape;
+    const ysMaterial* m_material;
+    ysVec4 m_posWS;
+    ysVec4 m_normalWS;
+    ysVec4 m_tangentWS;
+    ysVec4 m_incomingDirectionWS;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounceCount, ys_int32 maxBounceCount) const
+{
+    ysVec4 biTangentWS = ysCross(surfaceData.m_normalWS, surfaceData.m_tangentWS);
+
+    ysMtx44 surfaceFrameWS;
+    surfaceFrameWS.cx = surfaceData.m_tangentWS;
+    surfaceFrameWS.cy = biTangentWS;
+    surfaceFrameWS.cz = surfaceData.m_normalWS;
+
+    ysVec4 incomingDirectionLS = ysMulT33(surfaceFrameWS, surfaceData.m_incomingDirectionWS);
+
+    ysVec4 radiance = ysVec4_zero;
+
+    for (ys_int32 i = 0; i < m_lightPointCount; ++i)
+    {
+        const ysLightPoint* light = m_lightPoints + i;
+        ysVec4 surfaceToLightWS = light->m_position - surfaceData.m_posWS;
+        ys_float32 rr = ysLengthSqr3(surfaceToLightWS);
+        if (ysIsSafeToNormalize3(surfaceToLightWS) == false)
+        {
+            continue;
+        }
+        ysVec4 nSurfaceToLightWS = ysNormalize3(surfaceToLightWS);
+        ys_float32 cosTheta = ysDot3(nSurfaceToLightWS, surfaceData.m_normalWS);
+        if (cosTheta <= 0.0f)
+        {
+            continue;
+        }
+
+        ysSceneRayCastInput rci;
+        rci.m_maxLambda = 1.0f;
+        rci.m_direction = surfaceToLightWS;
+        rci.m_origin = surfaceData.m_posWS + nSurfaceToLightWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+
+        ysSceneRayCastOutput rco;
+        bool occluded = RayCastClosest(&rco, rci);
+        if (occluded)
+        {
+            continue;
+        }
+        ysVec4 projIrradiance = light->m_radiantIntensity * ysSplat(cosTheta) / ysSplat(rr);
+        ysVec4 nSurfaceToLightLS = ysMulT33(surfaceFrameWS, nSurfaceToLightWS);
+        ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, nSurfaceToLightLS);
+        radiance = radiance + projIrradiance * brdf;
+    }
+
+    if (bounceCount == maxBounceCount)
+    {
+        return radiance;
+    }
+
+    ysVec4 indirectRadiance = ysVec4_zero;
+
+    const ys_int32 sampleDirCount = 16;
+    for (ys_int32 i = 0; i < sampleDirCount; ++i)
+    {
+        ysVec4 outgoingDirectionLS;
+        ys_float32 probDens;
+        surfaceData.m_material->GenerateRandomDirection(this, &outgoingDirectionLS, &probDens, incomingDirectionLS);
+        ysAssert(probDens > 0.0f);
+        ysVec4 outgoingDirectionWS = ysMul33(surfaceFrameWS, outgoingDirectionLS);
+
+        ysSceneRayCastInput rci;
+        rci.m_maxLambda = ys_maxFloat;
+        rci.m_direction = outgoingDirectionWS;
+        rci.m_origin = surfaceData.m_posWS + outgoingDirectionWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+
+        ysSceneRayCastOutput rco;
+        bool hit = RayCastClosest(&rco, rci);
+        if (hit == false)
+        {
+            continue;
+        }
+
+        ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, outgoingDirectionLS);
+        ysAssert(ysAllGE3(brdf, ysVec4_zero));
+
+        ysSurfaceData otherSurface;
+        otherSurface.m_shape = m_shapes + rco.m_shapeId.m_index;
+        otherSurface.m_material = m_materials + otherSurface.m_shape->m_materialId.m_index;
+        otherSurface.m_posWS = rco.m_hitPoint;
+        otherSurface.m_normalWS = rco.m_hitNormal;
+        otherSurface.m_tangentWS = rco.m_hitTangent;
+        otherSurface.m_incomingDirectionWS = -outgoingDirectionWS;
+
+        ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount);
+        ysAssert(ysAllGE3(irradiance, ysVec4_zero));
+        indirectRadiance = indirectRadiance + brdf * irradiance / ysSplat(probDens);
+    }
+
+    ys_float32 invSampleCount = 1.0f / sampleDirCount;
+    radiance = radiance + indirectRadiance * ysSplat(invSampleCount);
+    return radiance;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,8 +282,6 @@ bool ysScene::RayCastClosest(ysRayCastOutput* output, const ysRayCastInput& inpu
 void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const
 {
     output->m_pixels.SetCount(input->m_pixelCountX * input->m_pixelCountY);
-
-    ys_float32 maxDepth = 0.0f;
 
     const ys_float32 aspectRatio = ys_float32(input->m_pixelCountX) / ys_float32(input->m_pixelCountY);
     const ys_float32 height = tanf(input->m_fovY);
@@ -103,38 +300,35 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
             ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
             ysVec4 pixelDirWS = ysRotate(input->m_eye.q, pixelDirLS);
 
-            ysRayCastInput rci;
+            ysSceneRayCastInput rci;
             rci.m_maxLambda = ys_maxFloat;
-            rci.m_ray.m_direction = pixelDirWS;
-            rci.m_ray.m_origin = input->m_eye.p;
+            rci.m_direction = pixelDirWS;
+            rci.m_origin = input->m_eye.p;
 
-            ysRayCastOutput rco;
+            ysSceneRayCastOutput rco;
             bool hit = RayCastClosest(&rco, rci);
-            if (hit)
-            {
-                ys_float32 depth = rco.m_lambda * ysLength3(pixelDirLS);
-                maxDepth = ysMax(depth, maxDepth);
-                output->m_pixels[pixelIdx].r = depth;
-                output->m_pixels[pixelIdx].g = depth;
-                output->m_pixels[pixelIdx].b = depth;
-            }
-            else
+            if (hit == false)
             {
                 output->m_pixels[pixelIdx].r = 0.0f;
                 output->m_pixels[pixelIdx].g = 0.0f;
                 output->m_pixels[pixelIdx].b = 0.0f;
+                pixelIdx++;
+                continue;
             }
 
+            ysSurfaceData surfaceData;
+            surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
+            surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
+            surfaceData.m_posWS = rco.m_hitPoint;
+            surfaceData.m_normalWS = rco.m_hitNormal;
+            surfaceData.m_tangentWS = rco.m_hitTangent;
+            surfaceData.m_incomingDirectionWS = -pixelDirWS;
+            ysVec4 radiance = SampleRadiance(surfaceData, 0, input->m_maxBounceCount);
+            output->m_pixels[pixelIdx].r = radiance.x;
+            output->m_pixels[pixelIdx].g = radiance.y;
+            output->m_pixels[pixelIdx].b = radiance.z;
             pixelIdx++;
         }
-    }
-
-    ys_float32 maxDepthInv = (maxDepth > 0.0f) ? 1.0f / maxDepth : 0.0f;
-    for (ys_int32 i = 0; i < output->m_pixels.GetCount(); ++i)
-    {
-        output->m_pixels[i].r *= maxDepthInv;
-        output->m_pixels[i].g *= maxDepthInv;
-        output->m_pixels[i].b *= maxDepthInv;
     }
 }
 
@@ -146,7 +340,7 @@ void ysScene::DebugDrawGeo(const ysDrawInputGeo* input) const
     colors[0] = Color(1.0f, 0.0f, 0.0f);
     for (ys_int32 i = 0; i < m_triangleCount; ++i)
     {
-        ysTriangle* triangle = m_triangles + i;
+        const ysTriangle* triangle = m_triangles + i;
         input->debugDraw->DrawTriangleList(triangle->m_v, colors, 1);
         if (triangle->m_twoSided)
         {
@@ -165,6 +359,22 @@ void ysScene::DebugDrawGeo(const ysDrawInputGeo* input) const
         c[1] = c[0];
         c[2] = c[1];
         input->debugDraw->DrawSegmentList(&segments[0][0], c, 3);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysScene::DebugDrawLights(const ysDrawInputLights* input) const
+{
+    Color wireFrameColor = Color(1.0f, 1.0f, 1.0f);
+    for (ys_int32 i = 0; i < m_lightPointCount; ++i)
+    {
+        const ysLightPoint* light = m_lightPoints + i;
+        ysTransform xf;
+        xf.q = ysQuat_identity;
+        xf.p = light->m_position;
+        ysVec4 halfDims = ysSplat(0.25f);
+        input->debugDraw->DrawWireEllipsoid(halfDims, xf, wireFrameColor);
     }
 }
 
@@ -211,4 +421,11 @@ void ysScene_DebugDrawBVH(const ysScene* scene, const ysDrawInputBVH* input)
 void ysScene_DebugDrawGeo(const ysScene* scene, const ysDrawInputGeo* input)
 {
     scene->DebugDrawGeo(input);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysScene_DebugDrawLights(const ysScene* scene, const ysDrawInputLights* input)
+{
+    scene->DebugDrawLights(input);
 }
