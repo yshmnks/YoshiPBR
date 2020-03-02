@@ -191,6 +191,19 @@ ysVec4 ysScene::SampleRadiance(ysShapeId shapeId, const ysVec4& posWS, const ysV
             continue;
         }
         ysVec4 nSurfaceToLightWS = ysNormalize3(surfaceToLightWS);
+
+        ysSceneRayCastInput rci;
+        rci.m_maxLambda = 1.0f;
+        rci.m_direction = surfaceToLightWS;
+        rci.m_origin = posWS + nSurfaceToLightWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+
+        ysSceneRayCastOutput rco;
+        bool occluded = RayCastClosest(&rco, rci);
+        if (occluded)
+        {
+            continue;
+        }
+
         ys_float32 cosTheta = ysDot3(nSurfaceToLightWS, normalWS);
         ysVec4 projIrradiance = light->m_radiantIntensity * ysSplat(cosTheta) / ysSplat(rr);
         ysVec4 nSurfaceToLightLS;

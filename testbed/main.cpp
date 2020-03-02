@@ -353,12 +353,12 @@ static void sCreateScene()
     materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[0].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[0].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[1].m_albedoDiffuse = ysVecSet(0.0f, 1.0f, 1.0f);
+    materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[1].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
     ysLightPointDef lightPoints[1];
-    lightPoints[0].m_position = ysVecSet(0.0f, 0.75f, 0.0f) * ysSplat(h);
+    lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.8f) * ysSplat(h);
     lightPoints[0].m_wattage = ysSplat(60.0f);
 
     ysSceneDef sceneDef;
