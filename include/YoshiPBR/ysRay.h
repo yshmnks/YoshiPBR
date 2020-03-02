@@ -34,5 +34,6 @@ struct ysRayCastOutput
 {
     ysVec4 m_hitPoint;
     ysVec4 m_hitNormal;
+    ysVec4 m_hitTangent;
     ys_float32 m_lambda; // hitpoint = origin + lambda * direction
 };

@@ -636,6 +636,7 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysSceneRayCastOutput* output, c
                 rci.m_maxLambda = rco.m_lambda;
                 output->m_hitPoint = rco.m_hitPoint;
                 output->m_hitNormal = rco.m_hitNormal;
+                output->m_hitTangent = rco.m_hitTangent;
                 output->m_lambda = rco.m_lambda;
                 output->m_shapeId = node->m_shapeId;
                 anyHit = true;

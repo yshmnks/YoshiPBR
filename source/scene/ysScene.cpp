@@ -170,32 +170,51 @@ bool ysScene::RayCastClosest(ysSceneRayCastOutput* output, const ysSceneRayCastI
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysVec4 ysScene::SampleRadiance(ysShapeId shapeId, const ysVec4& posWS, const ysVec4& normalWS, const ysVec4& inWS, ys_int32 bounceCount, ys_int32 maxBounceCount) const
+struct ysScene::ysSurfaceData
 {
-    const ysShape* shape = m_shapes + shapeId.m_index;
-    const ysMaterial* material = m_materials + shape->m_materialId.m_index;
-    ysVec4 inLS;
-    ysVec4 posLS_dummy;
-    ysVec4 posWS_dummy = ysVec4_zero;
-    shape->ConvertFromWSToLS(this, &posLS_dummy, &inLS, posWS_dummy, inWS);
+    const ysShape* m_shape;
+    const ysMaterial* m_material;
+    ysVec4 m_posWS;
+    ysVec4 m_normalWS;
+    ysVec4 m_tangentWS;
+    ysVec4 m_incomingDirectionWS;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounceCount, ys_int32 maxBounceCount) const
+{
+    ysVec4 biTangentWS = ysCross(surfaceData.m_normalWS, surfaceData.m_tangentWS);
+
+    ysMtx44 surfaceFrameWS;
+    surfaceFrameWS.cx = surfaceData.m_tangentWS;
+    surfaceFrameWS.cy = biTangentWS;
+    surfaceFrameWS.cz = surfaceData.m_normalWS;
+
+    ysVec4 incomingDirectionLS = ysMulT33(surfaceFrameWS, surfaceData.m_incomingDirectionWS);
 
     ysVec4 radiance = ysVec4_zero;
 
     for (ys_int32 i = 0; i < m_lightPointCount; ++i)
     {
         const ysLightPoint* light = m_lightPoints + i;
-        ysVec4 surfaceToLightWS = light->m_position - posWS;
+        ysVec4 surfaceToLightWS = light->m_position - surfaceData.m_posWS;
         ys_float32 rr = ysLengthSqr3(surfaceToLightWS);
         if (ysIsSafeToNormalize3(surfaceToLightWS) == false)
         {
             continue;
         }
         ysVec4 nSurfaceToLightWS = ysNormalize3(surfaceToLightWS);
+        ys_float32 cosTheta = ysDot3(nSurfaceToLightWS, surfaceData.m_normalWS);
+        if (cosTheta <= 0.0f)
+        {
+            continue;
+        }
 
         ysSceneRayCastInput rci;
         rci.m_maxLambda = 1.0f;
         rci.m_direction = surfaceToLightWS;
-        rci.m_origin = posWS + nSurfaceToLightWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+        rci.m_origin = surfaceData.m_posWS + nSurfaceToLightWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
 
         ysSceneRayCastOutput rco;
         bool occluded = RayCastClosest(&rco, rci);
@@ -203,12 +222,9 @@ ysVec4 ysScene::SampleRadiance(ysShapeId shapeId, const ysVec4& posWS, const ysV
         {
             continue;
         }
-
-        ys_float32 cosTheta = ysDot3(nSurfaceToLightWS, normalWS);
         ysVec4 projIrradiance = light->m_radiantIntensity * ysSplat(cosTheta) / ysSplat(rr);
-        ysVec4 nSurfaceToLightLS;
-        shape->ConvertFromWSToLS(this, &posLS_dummy, &nSurfaceToLightLS, posWS_dummy, nSurfaceToLightWS);
-        ysVec4 brdf = material->EvaluateBRDF(this, inLS, nSurfaceToLightLS);
+        ysVec4 nSurfaceToLightLS = ysMulT33(surfaceFrameWS, nSurfaceToLightWS);
+        ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, nSurfaceToLightLS);
         radiance = radiance + projIrradiance * brdf;
     }
 
@@ -222,17 +238,16 @@ ysVec4 ysScene::SampleRadiance(ysShapeId shapeId, const ysVec4& posWS, const ysV
     const ys_int32 sampleDirCount = 16;
     for (ys_int32 i = 0; i < sampleDirCount; ++i)
     {
-        ysVec4 outLS;
+        ysVec4 outgoingDirectionLS;
         ys_float32 probDens;
-        material->GenerateRandomDirection(this, &outLS, &probDens, inLS);
+        surfaceData.m_material->GenerateRandomDirection(this, &outgoingDirectionLS, &probDens, incomingDirectionLS);
         ysAssert(probDens > 0.0f);
-        ysVec4 outWS;
-        shape->ConvertFromLSToWS(this, &posWS_dummy, &outWS, posLS_dummy, inLS);
+        ysVec4 outgoingDirectionWS = ysMul33(surfaceFrameWS, outgoingDirectionLS);
 
         ysSceneRayCastInput rci;
         rci.m_maxLambda = ys_maxFloat;
-        rci.m_direction = outWS;
-        rci.m_origin = posWS + outWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+        rci.m_direction = outgoingDirectionWS;
+        rci.m_origin = surfaceData.m_posWS + outgoingDirectionWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
 
         ysSceneRayCastOutput rco;
         bool hit = RayCastClosest(&rco, rci);
@@ -241,9 +256,18 @@ ysVec4 ysScene::SampleRadiance(ysShapeId shapeId, const ysVec4& posWS, const ysV
             continue;
         }
 
-        ysVec4 brdf = material->EvaluateBRDF(this, inLS, outLS);
+        ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, outgoingDirectionLS);
         ysAssert(ysAllGE3(brdf, ysVec4_zero));
-        ysVec4 irradiance = SampleRadiance(rco.m_shapeId, rco.m_hitPoint, rco.m_hitNormal, -outWS, bounceCount + 1, maxBounceCount);
+
+        ysSurfaceData otherSurface;
+        otherSurface.m_shape = m_shapes + rco.m_shapeId.m_index;
+        otherSurface.m_material = m_materials + otherSurface.m_shape->m_materialId.m_index;
+        otherSurface.m_posWS = rco.m_hitPoint;
+        otherSurface.m_normalWS = rco.m_hitNormal;
+        otherSurface.m_tangentWS = rco.m_hitTangent;
+        otherSurface.m_incomingDirectionWS = -outgoingDirectionWS;
+
+        ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount);
         ysAssert(ysAllGE3(irradiance, ysVec4_zero));
         indirectRadiance = indirectRadiance + brdf * irradiance / ysSplat(probDens);
     }
@@ -292,21 +316,20 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
                 continue;
             }
 
-            ysVec4 radiance = SampleRadiance(rco.m_shapeId, rco.m_hitPoint, rco.m_hitNormal, -pixelDirWS, 0, input->m_maxBounceCount);
+            ysSurfaceData surfaceData;
+            surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
+            surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
+            surfaceData.m_posWS = rco.m_hitPoint;
+            surfaceData.m_normalWS = rco.m_hitNormal;
+            surfaceData.m_tangentWS = rco.m_hitTangent;
+            surfaceData.m_incomingDirectionWS = -pixelDirWS;
+            ysVec4 radiance = SampleRadiance(surfaceData, 0, input->m_maxBounceCount);
             output->m_pixels[pixelIdx].r = radiance.x;
             output->m_pixels[pixelIdx].g = radiance.y;
             output->m_pixels[pixelIdx].b = radiance.z;
             pixelIdx++;
         }
     }
-
-    //ys_float32 maxDepthInv = (maxDepth > 0.0f) ? 1.0f / maxDepth : 0.0f;
-    //for (ys_int32 i = 0; i < output->m_pixels.GetCount(); ++i)
-    //{
-    //    output->m_pixels[i].r *= maxDepthInv;
-    //    output->m_pixels[i].g *= maxDepthInv;
-    //    output->m_pixels[i].b *= maxDepthInv;
-    //}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
