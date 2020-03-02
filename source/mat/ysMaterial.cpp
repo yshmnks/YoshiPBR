@@ -30,8 +30,9 @@ void ysMaterial::GenerateRandomDirection(const ysScene* scene,
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
             subMat.GenerateRandomDirection(outgoingDirectionLS, probabilityDensity, incomingDirectionLS);
+            break;
         }
         default:
-            ysAssert(false);;
+            ysAssert(false);
     }
 }

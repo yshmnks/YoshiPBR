@@ -29,7 +29,7 @@ struct ysScene
 
     bool RayCastClosest(ysSceneRayCastOutput*, const ysSceneRayCastInput&) const;
 
-    ysVec4 SampleRadiance(const ysRay&, ys_int32 maxBounceCount) const;
+    ysVec4 SampleRadiance(ysShapeId shapeId, const ysVec4& posWS, const ysVec4& normalWS, const ysVec4& incidentWS, ys_int32 bounceCount, ys_int32 maxBounceCount) const;
 
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const;
 

@@ -119,6 +119,9 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                         s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, 1.0f);
                     }
                 }
+
+                ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 8);
+
                 ImGui::Separator();
 
                 if (ImGui::Button("Quit", button_sz))
@@ -350,7 +353,7 @@ static void sCreateScene()
     materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[0].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[0].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[1].m_albedoDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
+    materialStandards[1].m_albedoDiffuse = ysVecSet(0.0f, 1.0f, 1.0f);
     materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[1].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 

@@ -4,18 +4,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ysVec4 ysMaterialStandard::EvaluateBRDF(const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
 {
-    return m_albedoDiffuse / ysVec4_2pi;
+    return m_albedoDiffuse / ysVec4_pi;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysMaterialStandard::GenerateRandomDirection(ysVec4* outgoingLS, ys_float32* probabilityDensity, const ysVec4& incomingLS) const
 {
+    // Importance sample pdf(theta) = cos(theta)/pi
+    //                   cdf(theta) = (1-cos(2*theta))/2
     ys_float32 u = (ys_float32)std::rand() / RAND_MAX;
     ys_float32 v = (ys_float32)std::rand() / RAND_MAX;
     ys_float32 phi = ys_2pi * u;
-    ys_float32 cosTheta = v;
-    ys_float32 sinTheta = sqrtf(ysMax(0.0f, 1.0f - cosTheta * cosTheta));
+    ys_float32 cosTheta = sqrtf(1.0f - v);
+    ys_float32 sinTheta = sqrtf(v);
     *outgoingLS = ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
-    *probabilityDensity = 1.0f / ys_2pi;
+    *probabilityDensity = ys_pi / cosTheta;
 }
