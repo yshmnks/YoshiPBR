@@ -119,6 +119,13 @@ struct ysSceneRayCastOutput
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysSceneRenderInput
 {
+    enum RenderMode
+    {
+        e_regular,
+        e_normals,
+        e_depth,
+    };
+
     ysSceneRenderInput()
     {
         m_eye = ysTransform_identity;
@@ -126,6 +133,8 @@ struct ysSceneRenderInput
         m_pixelCountX = 0;
         m_pixelCountY = 0;
         m_maxBounceCount = 0;
+
+        m_renderMode = RenderMode::e_regular;
     }
 
     // For identity-eye-orientation, the eye looks down the -z axis (such that the x axis points right and y axis points up).
@@ -140,6 +149,8 @@ struct ysSceneRenderInput
 
     // 0 is direct illumination only.
     ys_int32 m_maxBounceCount;
+
+    RenderMode m_renderMode;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -241,7 +241,11 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
         ysVec4 outgoingDirectionLS;
         ys_float32 probDens;
         surfaceData.m_material->GenerateRandomDirection(this, &outgoingDirectionLS, &probDens, incomingDirectionLS);
-        ysAssert(probDens > 0.0f);
+        ysAssert(probDens >= 0.0f);
+        if (probDens < ys_epsilon)
+        {
+            continue;
+        }
         ysVec4 outgoingDirectionWS = ysMul33(surfaceFrameWS, outgoingDirectionLS);
 
         ysSceneRayCastInput rci;
@@ -307,27 +311,92 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
 
             ysSceneRayCastOutput rco;
             bool hit = RayCastClosest(&rco, rci);
-            if (hit == false)
-            {
-                output->m_pixels[pixelIdx].r = 0.0f;
-                output->m_pixels[pixelIdx].g = 0.0f;
-                output->m_pixels[pixelIdx].b = 0.0f;
-                pixelIdx++;
-                continue;
-            }
 
-            ysSurfaceData surfaceData;
-            surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
-            surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
-            surfaceData.m_posWS = rco.m_hitPoint;
-            surfaceData.m_normalWS = rco.m_hitNormal;
-            surfaceData.m_tangentWS = rco.m_hitTangent;
-            surfaceData.m_incomingDirectionWS = -pixelDirWS;
-            ysVec4 radiance = SampleRadiance(surfaceData, 0, input->m_maxBounceCount);
-            output->m_pixels[pixelIdx].r = radiance.x;
-            output->m_pixels[pixelIdx].g = radiance.y;
-            output->m_pixels[pixelIdx].b = radiance.z;
+            switch (input->m_renderMode)
+            {
+                case ysSceneRenderInput::RenderMode::e_regular:
+                {
+                    ysVec4 radiance = ysVec4_zero;
+                    if (hit)
+                    {
+                        ysSurfaceData surfaceData;
+                        surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
+                        surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
+                        surfaceData.m_posWS = rco.m_hitPoint;
+                        surfaceData.m_normalWS = rco.m_hitNormal;
+                        surfaceData.m_tangentWS = rco.m_hitTangent;
+                        surfaceData.m_incomingDirectionWS = -pixelDirWS;
+                        radiance = SampleRadiance(surfaceData, 0, input->m_maxBounceCount);
+                    }
+                    output->m_pixels[pixelIdx].r = radiance.x;
+                    output->m_pixels[pixelIdx].g = radiance.y;
+                    output->m_pixels[pixelIdx].b = radiance.z;
+                    break;
+                }
+                case ysSceneRenderInput::RenderMode::e_normals:
+                {
+                    ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
+                    output->m_pixels[pixelIdx].r = normalColor.x;
+                    output->m_pixels[pixelIdx].g = normalColor.y;
+                    output->m_pixels[pixelIdx].b = normalColor.z;
+                    break;
+                }
+                case ysSceneRenderInput::RenderMode::e_depth:
+                {
+                    ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
+                    output->m_pixels[pixelIdx].r = depth;
+                    output->m_pixels[pixelIdx].g = depth;
+                    output->m_pixels[pixelIdx].b = depth;
+                    break;
+                }
+            }
             pixelIdx++;
+        }
+    }
+
+    // Tone Mapping
+    switch (input->m_renderMode)
+    {
+        case ysSceneRenderInput::RenderMode::e_regular:
+        {
+            break;
+        }
+        case ysSceneRenderInput::RenderMode::e_normals:
+        {
+            break;
+        }
+        case ysSceneRenderInput::RenderMode::e_depth:
+        {
+            ys_float32 minDepth = ys_maxFloat;
+            ys_float32 maxDepth = 0.0f;
+            for (ys_int32 i = 0; i < input->m_pixelCountX * input->m_pixelCountY; ++i)
+            {
+                ys_float32 depth = output->m_pixels[i].r;
+                if (depth < 0.0f)
+                {
+                    continue;
+                }
+                minDepth = ysMin(minDepth, depth);
+                maxDepth = ysMax(maxDepth, depth);
+            }
+            for (ys_int32 i = 0; i < input->m_pixelCountX * input->m_pixelCountY; ++i)
+            {
+                ys_float32 depth = output->m_pixels[i].r;
+                if (depth < 0.0f)
+                {
+                    output->m_pixels[i].r = 1.0f;
+                    output->m_pixels[i].g = 0.0f;
+                    output->m_pixels[i].b = 0.0f;
+                }
+                else
+                {
+                    ys_float32 normalizedDepth = (depth - minDepth) / (maxDepth - minDepth);
+                    output->m_pixels[i].r = normalizedDepth;
+                    output->m_pixels[i].g = normalizedDepth;
+                    output->m_pixels[i].b = normalizedDepth;
+                }
+            }
+            break;
         }
     }
 }

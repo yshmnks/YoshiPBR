@@ -19,5 +19,5 @@ void ysMaterialStandard::GenerateRandomDirection(ysVec4* outgoingLS, ys_float32*
     ys_float32 cosTheta = sqrtf(1.0f - v);
     ys_float32 sinTheta = sqrtf(v);
     *outgoingLS = ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
-    *probabilityDensity = ys_pi / cosTheta;
+    *probabilityDensity = cosTheta / ys_pi;
 }
