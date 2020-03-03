@@ -261,6 +261,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
         }
 
         ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, outgoingDirectionLS);
+        ysVec4 cosTheta = ysSplatDot3(outgoingDirectionWS, surfaceData.m_normalWS);
         ysAssert(ysAllGE3(brdf, ysVec4_zero));
 
         ysSurfaceData otherSurface;
@@ -273,7 +274,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 
         ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount);
         ysAssert(ysAllGE3(irradiance, ysVec4_zero));
-        indirectRadiance = indirectRadiance + brdf * irradiance / ysSplat(probDens);
+        indirectRadiance = indirectRadiance + brdf * irradiance * cosTheta / ysSplat(probDens);
     }
 
     ys_float32 invSampleCount = 1.0f / sampleDirCount;
