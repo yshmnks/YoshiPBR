@@ -16,6 +16,7 @@ set(YOSHIPBR_SOURCE_FILES
     mat/ysMaterialStandard.cpp
     mat/ysMaterialStandard.h
     scene/ysScene.cpp
+    scene/ysScene.h
     )
 
 set(YOSHIPBR_HEADER_FILES
@@ -28,7 +29,6 @@ set(YOSHIPBR_HEADER_FILES
 	../include/YoshiPBR/ysDebugDraw.h
     ../include/YoshiPBR/ysMath.h
     ../include/YoshiPBR/ysRay.h
-    ../include/YoshiPBR/ysScene.h
     ../include/YoshiPBR/ysShape.h
 	../include/YoshiPBR/ysStructures.h
     ../include/YoshiPBR/ysTriangle.h

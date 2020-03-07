@@ -1,9 +1,9 @@
 #include "YoshiPBR/ysBVH.h"
 #include "YoshiPBR/ysDebugDraw.h"
 #include "YoshiPBR/ysRay.h"
-#include "YoshiPBR/ysScene.h"
 #include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
+#include "scene/ysScene.h"
 
 #include <algorithm>
 

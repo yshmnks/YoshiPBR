@@ -1,4 +1,4 @@
-#include "YoshiPBR/ysScene.h"
+#include "ysScene.h"
 #include "YoshiPBR/ysDebugDraw.h"
 #include "light/ysLight.h"
 #include "light/ysLightPoint.h"
