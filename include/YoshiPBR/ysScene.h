@@ -3,6 +3,8 @@
 #include "YoshiPBR/ysTypes.h"
 #include "YoshiPBR/ysBVH.h"
 
+#define YOSHIPBR_MAX_SCENE_COUNT (1)
+
 struct ysDrawInputGeo;
 struct ysLight;
 struct ysLightPoint;
@@ -26,17 +28,17 @@ struct ysScene
     struct ysSurfaceData;
 
     void Reset();
-    void Create(const ysSceneDef*);
+    void Create(const ysSceneDef&);
     void Destroy();
 
     bool RayCastClosest(ysSceneRayCastOutput*, const ysSceneRayCastInput&) const;
 
     ysVec4 SampleRadiance(const ysSurfaceData&, ys_int32 bounceCount, ys_int32 maxBounceCount) const;
 
-    void Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const;
+    void Render(ysSceneRenderOutput* output, const ysSceneRenderInput& input) const;
 
-    void DebugDrawGeo(const ysDrawInputGeo*) const;
-    void DebugDrawLights(const ysDrawInputLights*) const;
+    void DebugDrawGeo(const ysDrawInputGeo&) const;
+    void DebugDrawLights(const ysDrawInputLights&) const;
 
     ysBVH m_bvh;
 
@@ -57,4 +59,6 @@ struct ysScene
 
     ysLightPoint* m_lightPoints;
     ys_int32 m_lightPointCount;
+
+    static ysScene* s_scenes[YOSHIPBR_MAX_SCENE_COUNT];
 };

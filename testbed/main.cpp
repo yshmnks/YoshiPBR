@@ -14,7 +14,7 @@
 #include <stdio.h>
 
 GLFWwindow* g_mainWindow = nullptr;
-static ysScene* s_scene = nullptr;
+static ysSceneId s_sceneId = ys_nullSceneId;
 static bool s_rightMouseDown = false;
 static ys_float32 s_uiScale = 1.0f;
 static ys_float32 s_mouseX = 0.0f;
@@ -93,7 +93,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImGui::Checkbox("Draw Lights", &g_settings.m_drawLights);
                 ImGui::Checkbox("Draw BVH", &g_settings.m_drawBVH);
                 ImGui::SameLine();
-                ImGui::SliderInt("Depth", &g_settings.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_scene) - 1);
+                ImGui::SliderInt("Depth", &g_settings.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_sceneId) - 1);
                 ImGui::Separator();
 
                 ImGui::Checkbox("Draw Render", &g_settings.m_drawRender);
@@ -102,18 +102,21 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 if (ImGui::Button("Render", button_sz))
                 {
                     ys_float32 aspectRatio = (ys_float32)windowWidth / (ys_float32)windowHeight;
+                    ys_int32 xCount = ys_int32(aspectRatio * windowHeight);
+                    ys_int32 yCount = windowHeight;
+
                     s_renderInput.m_eye = g_camera.ComputeEyeTransform();
                     s_renderInput.m_fovY = g_camera.m_verticalFov;
-                    s_renderInput.m_pixelCountY = windowHeight;
-                    s_renderInput.m_pixelCountX = ys_int32(aspectRatio * windowHeight);
+                    s_renderInput.m_pixelCountY = yCount;
+                    s_renderInput.m_pixelCountX = xCount;
 
                     ysSceneRenderOutput renderOutput;
-                    ysScene_Render(s_scene, &renderOutput, &s_renderInput);
+                    ysScene_Render(s_sceneId, &renderOutput, s_renderInput);
 
-                    s_pixels.SetCount(windowWidth * windowHeight);
-                    s_pixelCountX = windowWidth;
-                    s_pixelCountY = windowHeight;
-                    for (ys_int32 i = 0; i < windowWidth * windowHeight; ++i)
+                    s_pixels.SetCount(xCount * yCount);
+                    s_pixelCountX = xCount;
+                    s_pixelCountY = yCount;
+                    for (ys_int32 i = 0; i < xCount * yCount; ++i)
                     {
                         const ysFloat3& rgb = renderOutput.m_pixels[i];
                         s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, 1.0f);
@@ -400,15 +403,15 @@ static void sCreateScene()
     sceneDef.m_lightPoints = lightPoints;
     sceneDef.m_lightPointCount = 1;
 
-    s_scene = ysScene_Create(&sceneDef);
+    s_sceneId = ysScene_Create(sceneDef);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sDestroyScene()
 {
-    ysScene_Destroy(s_scene);
-    s_scene = nullptr;
+    ysScene_Destroy(s_sceneId);
+    s_sceneId = ys_nullSceneId;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -503,21 +506,21 @@ int main(int, char**)
             ysDrawInputBVH input;
             input.debugDraw = &g_debugDraw;
             input.depth = g_settings.m_drawBVHDepth;
-            ysScene_DebugDrawBVH(s_scene, &input);
+            ysScene_DebugDrawBVH(s_sceneId, input);
         }
 
         if (g_settings.m_drawGeo)
         {
             ysDrawInputGeo input;
             input.debugDraw = &g_debugDraw;
-            ysScene_DebugDrawGeo(s_scene, &input);
+            ysScene_DebugDrawGeo(s_sceneId, input);
         }
 
         if (g_settings.m_drawLights)
         {
             ysDrawInputLights input;
             input.debugDraw = &g_debugDraw;
-            ysScene_DebugDrawLights(s_scene, &input);
+            ysScene_DebugDrawLights(s_sceneId, input);
         }
 
         if (g_settings.m_drawRender)

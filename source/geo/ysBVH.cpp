@@ -648,11 +648,11 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysSceneRayCastOutput* output, c
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
+void ysBVH::DebugDraw(const ysDrawInputBVH& input) const
 {
     Color color = Color(1.0f, 1.0f, 1.0f, 1.0f);
 
-    if (input->depth < 0)
+    if (input.depth < 0)
     {
         for (ys_int32 i = 0; i < m_nodeCount; ++i)
         {
@@ -661,18 +661,18 @@ void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
             ysTransform xf;
             xf.q = ysQuat_identity;
             xf.p = (aabb.m_min + aabb.m_max) * ysVec4_half;
-            input->debugDraw->DrawWireBox(halfDims, xf, color);
+            input.debugDraw->DrawWireBox(halfDims, xf, color);
         }
         return;
     }
 
-    if (input->depth > m_depth - 1)
+    if (input.depth > m_depth - 1)
     {
         return;
     }
 
     const ys_int32 k_stackSize = 256;
-    ysAssert(input->depth < k_stackSize);
+    ysAssert(input.depth < k_stackSize);
     ys_int32 nodeIndexStack[k_stackSize];
     ys_int32 nodeDepthStack[k_stackSize];
     nodeIndexStack[0] = 0;
@@ -683,17 +683,17 @@ void ysBVH::DebugDraw(const ysDrawInputBVH* input) const
         stackCount--;
         const Node* node = m_nodes + nodeIndexStack[stackCount];
         ys_int32 depth = nodeDepthStack[stackCount];
-        if (depth == input->depth)
+        if (depth == input.depth)
         {
             const ysAABB& aabb = node->m_aabb;
             ysVec4 halfDims = (aabb.m_max - aabb.m_min) * ysVec4_half;
             ysTransform xf;
             xf.q = ysQuat_identity;
             xf.p = (aabb.m_min + aabb.m_max) * ysVec4_half;
-            input->debugDraw->DrawWireBox(halfDims, xf, color);
+            input.debugDraw->DrawWireBox(halfDims, xf, color);
             continue;
         }
-        ysAssert(depth < input->depth);
+        ysAssert(depth < input.depth);
         ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
         if (node->m_left != ys_nullIndex)
         {

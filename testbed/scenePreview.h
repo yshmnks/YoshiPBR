@@ -10,5 +10,5 @@ struct ScenePreview
 
     void Draw();
 
-    ysScene* m_scene;
+    ysSceneId m_sceneId;
 };

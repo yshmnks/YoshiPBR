@@ -23,6 +23,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysAABB.h
     ../include/YoshiPBR/ysArrayG.h
     ../include/YoshiPBR/ysArrayGF.h
+    ../include/YoshiPBR/ysPool.h
     ../include/YoshiPBR/ysBVH.h
 	../include/YoshiPBR/ysDebugDraw.h
     ../include/YoshiPBR/ysMath.h

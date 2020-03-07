@@ -35,7 +35,7 @@ struct ysBVH
 
     bool RayCastClosest(const ysScene* scene, ysSceneRayCastOutput*, const ysSceneRayCastInput&) const;
 
-    void DebugDraw(const ysDrawInputBVH*) const;
+    void DebugDraw(const ysDrawInputBVH&) const;
 
     Node* m_nodes; // Sorted so that parents preceed children
     ys_int32 m_nodeCount;
