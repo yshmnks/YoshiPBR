@@ -9,6 +9,8 @@
 #include "YoshiPBR/ysStructures.h"
 #include "YoshiPBR/ysTriangle.h"
 
+ysScene* ysScene::s_scenes[YOSHIPBR_MAX_SCENE_COUNT] = { nullptr };
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysScene::Reset()
@@ -30,24 +32,24 @@ void ysScene::Reset()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene::Create(const ysSceneDef* def)
+void ysScene::Create(const ysSceneDef& def)
 {
-    m_shapeCount = def->m_triangleCount;
+    m_shapeCount = def.m_triangleCount;
     m_shapes = static_cast<ysShape*>(ysMalloc(sizeof(ysShape) * m_shapeCount));
 
-    m_triangleCount = def->m_triangleCount;
+    m_triangleCount = def.m_triangleCount;
     m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
 
-    m_materialCount = def->m_materialStandardCount;
+    m_materialCount = def.m_materialStandardCount;
     m_materials = static_cast<ysMaterial*>(ysMalloc(sizeof(ysMaterial) * m_materialCount));
 
-    m_materialStandardCount = def->m_materialStandardCount;
+    m_materialStandardCount = def.m_materialStandardCount;
     m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
 
-    m_lightCount = def->m_lightPointCount;
+    m_lightCount = def.m_lightPointCount;
     m_lights = static_cast<ysLight*>(ysMalloc(sizeof(ysLight) * m_lightCount));
 
-    m_lightPointCount = def->m_lightPointCount;
+    m_lightPointCount = def.m_lightPointCount;
     m_lightPoints = static_cast<ysLightPoint*>(ysMalloc(sizeof(ysLightPoint) * m_lightPointCount));
 
     ys_int32 materialStandardStartIdx = 0;
@@ -64,7 +66,7 @@ void ysScene::Create(const ysSceneDef* def)
     for (ys_int32 i = 0; i < m_triangleCount; ++i, ++shapeIdx)
     {
         ysTriangle* dstTriangle = m_triangles + i;
-        const ysInputTriangle* srcTriangle = def->m_triangles + i;
+        const ysInputTriangle* srcTriangle = def.m_triangles + i;
         dstTriangle->m_v[0] = srcTriangle->m_vertices[0];
         dstTriangle->m_v[1] = srcTriangle->m_vertices[1];
         dstTriangle->m_v[2] = srcTriangle->m_vertices[2];
@@ -108,7 +110,7 @@ void ysScene::Create(const ysSceneDef* def)
     for (ys_int32 i = 0; i < m_materialStandardCount; ++i, ++materialIdx)
     {
         ysMaterialStandard* dst = m_materialStandards + i;
-        const ysMaterialStandardDef* src = def->m_materialStandards + i;
+        const ysMaterialStandardDef* src = def.m_materialStandards + i;
         dst->m_albedoDiffuse = src->m_albedoDiffuse;
         dst->m_albedoSpecular = src->m_albedoSpecular;
         dst->m_emissiveDiffuse = src->m_emissiveDiffuse;
@@ -130,7 +132,7 @@ void ysScene::Create(const ysSceneDef* def)
     for (ys_int32 i = 0; i < m_lightPointCount; ++i, ++lightIdx)
     {
         ysLightPoint* dst = m_lightPoints + i;
-        const ysLightPointDef* src = def->m_lightPoints + i;
+        const ysLightPointDef* src = def.m_lightPoints + i;
         dst->m_position = src->m_position;
         dst->m_radiantIntensity = src->m_wattage * invSphereRadians;
 
@@ -450,52 +452,77 @@ void ysScene::DebugDrawLights(const ysDrawInputLights* input) const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysScene* ysScene_Create(const ysSceneDef* def)
+ysSceneId ysScene_Create(const ysSceneDef& def)
 {
-    ysScene* scene = static_cast<ysScene*>(ysMalloc(sizeof(ysScene)));
-    scene->Create(def);
-    return scene;
+    ys_int32 freeSceneIdx = 0;
+    while (freeSceneIdx < YOSHIPBR_MAX_SCENE_COUNT)
+    {
+        if (ysScene::s_scenes[freeSceneIdx] == nullptr)
+        {
+            break;
+        }
+        freeSceneIdx++;
+    }
+
+    if (freeSceneIdx == YOSHIPBR_MAX_SCENE_COUNT)
+    {
+        return ys_nullSceneId;
+    }
+
+    ysScene::s_scenes[freeSceneIdx] = static_cast<ysScene*>(ysMalloc(sizeof(ysScene)));
+    ysScene::s_scenes[freeSceneIdx]->Create(def);
+
+    ysSceneId id;
+    id.m_index = freeSceneIdx;
+    return id;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_Destroy(ysScene* scene)
+void ysScene_Destroy(ysSceneId id)
 {
-    scene->Destroy();
-    ysFree(scene);
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    ysScene::s_scenes[id.m_index]->Destroy();
+    ysFree(ysScene::s_scenes[id.m_index]);
+    ysScene::s_scenes[id.m_index] = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_Render(const ysScene* scene, ysSceneRenderOutput* output, const ysSceneRenderInput* input)
+void ysScene_Render(ysSceneId id, ysSceneRenderOutput* output, const ysSceneRenderInput* input)
 {
-    scene->Render(output, input);
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    ysScene::s_scenes[id.m_index]->Render(output, input);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_int32 ysScene_GetBVHDepth(const ysScene* scene)
+ys_int32 ysScene_GetBVHDepth(ysSceneId id)
 {
-    return scene->m_bvh.m_depth;
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    return ysScene::s_scenes[id.m_index]->m_bvh.m_depth;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_DebugDrawBVH(const ysScene* scene, const ysDrawInputBVH* input)
+void ysScene_DebugDrawBVH(ysSceneId id, const ysDrawInputBVH* input)
 {
-    scene->m_bvh.DebugDraw(input);
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    ysScene::s_scenes[id.m_index]->m_bvh.DebugDraw(input);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_DebugDrawGeo(const ysScene* scene, const ysDrawInputGeo* input)
+void ysScene_DebugDrawGeo(ysSceneId id, const ysDrawInputGeo* input)
 {
-    scene->DebugDrawGeo(input);
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    ysScene::s_scenes[id.m_index]->DebugDrawGeo(input);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_DebugDrawLights(const ysScene* scene, const ysDrawInputLights* input)
+void ysScene_DebugDrawLights(ysSceneId id, const ysDrawInputLights* input)
 {
-    scene->DebugDrawLights(input);
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    ysScene::s_scenes[id.m_index]->DebugDrawLights(input);
 }
