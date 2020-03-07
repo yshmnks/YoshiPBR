@@ -286,36 +286,36 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* input) const
+void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput& input) const
 {
-    output->m_pixels.SetCount(input->m_pixelCountX * input->m_pixelCountY);
+    output->m_pixels.SetCount(input.m_pixelCountX * input.m_pixelCountY);
 
-    const ys_float32 aspectRatio = ys_float32(input->m_pixelCountX) / ys_float32(input->m_pixelCountY);
-    const ys_float32 height = tanf(input->m_fovY);
+    const ys_float32 aspectRatio = ys_float32(input.m_pixelCountX) / ys_float32(input.m_pixelCountY);
+    const ys_float32 height = tanf(input.m_fovY);
     const ys_float32 width = height * aspectRatio;
 
     ys_int32 pixelIdx = 0;
-    for (ys_int32 i = 0; i < input->m_pixelCountY; ++i)
+    for (ys_int32 i = 0; i < input.m_pixelCountY; ++i)
     {
-        ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input->m_pixelCountY);
+        ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input.m_pixelCountY);
         ys_float32 y = height * yFraction;
-        for (ys_int32 j = 0; j < input->m_pixelCountX; ++j)
+        for (ys_int32 j = 0; j < input.m_pixelCountX; ++j)
         {
-            ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input->m_pixelCountX) - 1.0f;
+            ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input.m_pixelCountX) - 1.0f;
             ys_float32 x = width * xFraction;
 
             ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
-            ysVec4 pixelDirWS = ysRotate(input->m_eye.q, pixelDirLS);
+            ysVec4 pixelDirWS = ysRotate(input.m_eye.q, pixelDirLS);
 
             ysSceneRayCastInput rci;
             rci.m_maxLambda = ys_maxFloat;
             rci.m_direction = pixelDirWS;
-            rci.m_origin = input->m_eye.p;
+            rci.m_origin = input.m_eye.p;
 
             ysSceneRayCastOutput rco;
             bool hit = RayCastClosest(&rco, rci);
 
-            switch (input->m_renderMode)
+            switch (input.m_renderMode)
             {
                 case ysSceneRenderInput::RenderMode::e_regular:
                 {
@@ -329,7 +329,7 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
                         surfaceData.m_normalWS = rco.m_hitNormal;
                         surfaceData.m_tangentWS = rco.m_hitTangent;
                         surfaceData.m_incomingDirectionWS = -pixelDirWS;
-                        radiance = SampleRadiance(surfaceData, 0, input->m_maxBounceCount);
+                        radiance = SampleRadiance(surfaceData, 0, input.m_maxBounceCount);
                     }
                     output->m_pixels[pixelIdx].r = radiance.x;
                     output->m_pixels[pixelIdx].g = radiance.y;
@@ -358,7 +358,7 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
     }
 
     // Tone Mapping
-    switch (input->m_renderMode)
+    switch (input.m_renderMode)
     {
         case ysSceneRenderInput::RenderMode::e_regular:
         {
@@ -372,7 +372,7 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
         {
             ys_float32 minDepth = ys_maxFloat;
             ys_float32 maxDepth = 0.0f;
-            for (ys_int32 i = 0; i < input->m_pixelCountX * input->m_pixelCountY; ++i)
+            for (ys_int32 i = 0; i < input.m_pixelCountX * input.m_pixelCountY; ++i)
             {
                 ys_float32 depth = output->m_pixels[i].r;
                 if (depth < 0.0f)
@@ -382,7 +382,7 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
                 minDepth = ysMin(minDepth, depth);
                 maxDepth = ysMax(maxDepth, depth);
             }
-            for (ys_int32 i = 0; i < input->m_pixelCountX * input->m_pixelCountY; ++i)
+            for (ys_int32 i = 0; i < input.m_pixelCountX * input.m_pixelCountY; ++i)
             {
                 ys_float32 depth = output->m_pixels[i].r;
                 if (depth < 0.0f)
@@ -406,18 +406,18 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput* inpu
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene::DebugDrawGeo(const ysDrawInputGeo* input) const
+void ysScene::DebugDrawGeo(const ysDrawInputGeo& input) const
 {
     Color colors[1];
     colors[0] = Color(1.0f, 0.0f, 0.0f);
     for (ys_int32 i = 0; i < m_triangleCount; ++i)
     {
         const ysTriangle* triangle = m_triangles + i;
-        input->debugDraw->DrawTriangleList(triangle->m_v, colors, 1);
+        input.debugDraw->DrawTriangleList(triangle->m_v, colors, 1);
         if (triangle->m_twoSided)
         {
             ysVec4 cba[3] = { triangle->m_v[2], triangle->m_v[1], triangle->m_v[0] };
-            input->debugDraw->DrawTriangleList(cba, colors, 1);
+            input.debugDraw->DrawTriangleList(cba, colors, 1);
         }
         ysVec4 segments[3][2];
         segments[0][0] = triangle->m_v[0];
@@ -430,13 +430,13 @@ void ysScene::DebugDrawGeo(const ysDrawInputGeo* input) const
         c[0] = Color(1.0f, 1.0f, 1.0f);
         c[1] = c[0];
         c[2] = c[1];
-        input->debugDraw->DrawSegmentList(&segments[0][0], c, 3);
+        input.debugDraw->DrawSegmentList(&segments[0][0], c, 3);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene::DebugDrawLights(const ysDrawInputLights* input) const
+void ysScene::DebugDrawLights(const ysDrawInputLights& input) const
 {
     Color wireFrameColor = Color(1.0f, 1.0f, 1.0f);
     for (ys_int32 i = 0; i < m_lightPointCount; ++i)
@@ -446,7 +446,7 @@ void ysScene::DebugDrawLights(const ysDrawInputLights* input) const
         xf.q = ysQuat_identity;
         xf.p = light->m_position;
         ysVec4 halfDims = ysSplat(0.25f);
-        input->debugDraw->DrawWireEllipsoid(halfDims, xf, wireFrameColor);
+        input.debugDraw->DrawWireEllipsoid(halfDims, xf, wireFrameColor);
     }
 }
 
@@ -489,7 +489,7 @@ void ysScene_Destroy(ysSceneId id)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_Render(ysSceneId id, ysSceneRenderOutput* output, const ysSceneRenderInput* input)
+void ysScene_Render(ysSceneId id, ysSceneRenderOutput* output, const ysSceneRenderInput& input)
 {
     ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
     ysScene::s_scenes[id.m_index]->Render(output, input);
@@ -505,7 +505,7 @@ ys_int32 ysScene_GetBVHDepth(ysSceneId id)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_DebugDrawBVH(ysSceneId id, const ysDrawInputBVH* input)
+void ysScene_DebugDrawBVH(ysSceneId id, const ysDrawInputBVH& input)
 {
     ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
     ysScene::s_scenes[id.m_index]->m_bvh.DebugDraw(input);
@@ -513,7 +513,7 @@ void ysScene_DebugDrawBVH(ysSceneId id, const ysDrawInputBVH* input)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_DebugDrawGeo(ysSceneId id, const ysDrawInputGeo* input)
+void ysScene_DebugDrawGeo(ysSceneId id, const ysDrawInputGeo& input)
 {
     ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
     ysScene::s_scenes[id.m_index]->DebugDrawGeo(input);
@@ -521,7 +521,7 @@ void ysScene_DebugDrawGeo(ysSceneId id, const ysDrawInputGeo* input)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysScene_DebugDrawLights(ysSceneId id, const ysDrawInputLights* input)
+void ysScene_DebugDrawLights(ysSceneId id, const ysDrawInputLights& input)
 {
     ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
     ysScene::s_scenes[id.m_index]->DebugDrawLights(input);

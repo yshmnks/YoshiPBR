@@ -111,7 +111,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                     s_renderInput.m_pixelCountX = xCount;
 
                     ysSceneRenderOutput renderOutput;
-                    ysScene_Render(s_sceneId, &renderOutput, &s_renderInput);
+                    ysScene_Render(s_sceneId, &renderOutput, s_renderInput);
 
                     s_pixels.SetCount(xCount * yCount);
                     s_pixelCountX = xCount;
@@ -506,21 +506,21 @@ int main(int, char**)
             ysDrawInputBVH input;
             input.debugDraw = &g_debugDraw;
             input.depth = g_settings.m_drawBVHDepth;
-            ysScene_DebugDrawBVH(s_sceneId, &input);
+            ysScene_DebugDrawBVH(s_sceneId, input);
         }
 
         if (g_settings.m_drawGeo)
         {
             ysDrawInputGeo input;
             input.debugDraw = &g_debugDraw;
-            ysScene_DebugDrawGeo(s_sceneId, &input);
+            ysScene_DebugDrawGeo(s_sceneId, input);
         }
 
         if (g_settings.m_drawLights)
         {
             ysDrawInputLights input;
             input.debugDraw = &g_debugDraw;
-            ysScene_DebugDrawLights(s_sceneId, &input);
+            ysScene_DebugDrawLights(s_sceneId, input);
         }
 
         if (g_settings.m_drawRender)
