@@ -40,9 +40,8 @@ struct ysScene
 
     ysVec4 SampleRadiance(const ysSurfaceData&, ys_int32 bounceCount, ys_int32 maxBounceCount) const;
 
+    void DoRenderWork(ysRender* target) const;
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput& input) const;
-
-    void DoRender(ysRender* target) const;
 
     void DebugDrawGeo(const ysDrawInputGeo&) const;
     void DebugDrawLights(const ysDrawInputLights&) const;

@@ -28,7 +28,7 @@ struct ysRender
     void Create(const ysScene*, const ysSceneRenderInput&);
     void Destroy();
 
-    void BeginRender();
+    void DoWork();
     void GetOutputIntermediate(ysSceneRenderOutputIntermediate*) const;
     void GetOutputFinal(ysSceneRenderOutput*);
 
