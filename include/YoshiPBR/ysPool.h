@@ -117,7 +117,7 @@ ys_int32 ysPool<T>::Allocate()
 {
     if (m_count == m_capacity)
     {
-        ysAssert(m_freeList == ys_nullIndex && m_ceiling = m_capacity);
+        ysAssert(m_freeList == ys_nullIndex && m_ceiling == m_capacity);
 
         {
             // expand capacity
@@ -146,6 +146,7 @@ ys_int32 ysPool<T>::Allocate()
     }
     else
     {
+        ysAssert(m_freeList != ys_nullIndex);
         ys_int32 freeIndex = m_freeList;
         m_freeList = m_data[freeIndex].m_poolNext;
         m_count++;

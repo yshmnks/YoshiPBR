@@ -1,7 +1,10 @@
 #pragma once
 
-#include "YoshiPBR/ysTypes.h"
 #include "YoshiPBR/ysBVH.h"
+#include "YoshiPBR/ysPool.h"
+#include "YoshiPBR/ysTypes.h"
+
+#include "scene/ysRender.h"
 
 #define YOSHIPBR_MAX_SCENE_COUNT (1)
 
@@ -25,6 +28,8 @@ struct ysTriangle;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysScene
 {
+    static ysScene* s_scenes[YOSHIPBR_MAX_SCENE_COUNT];
+
     struct ysSurfaceData;
 
     void Reset();
@@ -36,6 +41,8 @@ struct ysScene
     ysVec4 SampleRadiance(const ysSurfaceData&, ys_int32 bounceCount, ys_int32 maxBounceCount) const;
 
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput& input) const;
+
+    void DoRender(ysRender* target) const;
 
     void DebugDrawGeo(const ysDrawInputGeo&) const;
     void DebugDrawLights(const ysDrawInputLights&) const;
@@ -59,6 +66,6 @@ struct ysScene
 
     ysLightPoint* m_lightPoints;
     ys_int32 m_lightPointCount;
-
-    static ysScene* s_scenes[YOSHIPBR_MAX_SCENE_COUNT];
+    
+    ysPool<ysRender> m_renders;
 };
