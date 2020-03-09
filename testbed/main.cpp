@@ -15,6 +15,7 @@
 
 GLFWwindow* g_mainWindow = nullptr;
 static ysSceneId s_sceneId = ys_nullSceneId;
+static ysRenderId s_renderId = ys_nullRenderId;
 static bool s_rightMouseDown = false;
 static ys_float32 s_uiScale = 1.0f;
 static ys_float32 s_mouseX = 0.0f;
@@ -110,17 +111,16 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                     s_renderInput.m_pixelCountY = yCount;
                     s_renderInput.m_pixelCountX = xCount;
 
-                    ysSceneRenderOutput renderOutput;
-                    ysScene_Render(s_sceneId, &renderOutput, s_renderInput);
+                    if (s_renderId != ys_nullRenderId)
+                    {
+                        ysScene_DestroyRender(s_renderId);
+                    }
+                    s_renderId = ysScene_CreateRender(s_sceneId, s_renderInput);
+                    ysRender_BeginWork(s_renderId);
 
                     s_pixels.SetCount(xCount * yCount);
                     s_pixelCountX = xCount;
                     s_pixelCountY = yCount;
-                    for (ys_int32 i = 0; i < xCount * yCount; ++i)
-                    {
-                        const ysFloat3& rgb = renderOutput.m_pixels[i];
-                        s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, 1.0f);
-                    }
                 }
 
                 ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 8);
@@ -410,6 +410,11 @@ static void sCreateScene()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sDestroyScene()
 {
+    if (s_renderId != ys_nullRenderId)
+    {
+        ysScene_DestroyRender(s_renderId);
+        s_renderId = ys_nullRenderId;
+    }
     ysScene_Destroy(s_sceneId);
     s_sceneId = ys_nullSceneId;
 }
@@ -525,19 +530,31 @@ int main(int, char**)
 
         if (g_settings.m_drawRender)
         {
-            Texture2D tex;
-            tex.m_pixels = s_pixels.GetEntries();
-            tex.m_width = s_pixelCountX;
-            tex.m_height = s_pixelCountY;
+            if (s_renderId != ys_nullRenderId)
+            {
+                ysSceneRenderOutputIntermediate output;
+                ysRender_GetIntermediateOutput(s_renderId, &output);
+                ysAssert(output.m_pixels.GetCount() == s_pixelCountX * s_pixelCountY);
+                for (ys_int32 i = 0; i < output.m_pixels.GetCount(); ++i)
+                {
+                    const ysFloat4& rgb = output.m_pixels[i];
+                    s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, rgb.a);
+                }
 
-            ys_float32 aspectRatio = (ys_float32)s_renderInput.m_pixelCountX / (ys_float32)s_renderInput.m_pixelCountY;
+                Texture2D tex;
+                tex.m_pixels = s_pixels.GetEntries();
+                tex.m_width = s_pixelCountX;
+                tex.m_height = s_pixelCountY;
 
-            ysTransform xf;
-            xf.p = ysMul(s_renderInput.m_eye, -ysVec4_unitZ);
-            xf.q = s_renderInput.m_eye.q;
-            ys_float32 quadHeight = tanf(s_renderInput.m_fovY) * 2.0f;
-            ys_float32 quadWidth = quadHeight * aspectRatio;
-            g_debugDraw.DrawTexturedQuad(tex, quadWidth, quadHeight, xf, false, true);
+                ys_float32 aspectRatio = (ys_float32)s_renderInput.m_pixelCountX / (ys_float32)s_renderInput.m_pixelCountY;
+
+                ysTransform xf;
+                xf.p = ysMul(s_renderInput.m_eye, -ysVec4_unitZ);
+                xf.q = s_renderInput.m_eye.q;
+                ys_float32 quadHeight = tanf(s_renderInput.m_fovY) * 2.0f;
+                ys_float32 quadWidth = quadHeight * aspectRatio;
+                g_debugDraw.DrawTexturedQuad(tex, quadWidth, quadHeight, xf, true, true);
+            }
         }
 
         g_debugDraw.Flush();

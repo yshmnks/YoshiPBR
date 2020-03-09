@@ -3,6 +3,9 @@
 #include "YoshiPBR/ysStructures.h"
 #include "YoshiPBR/ysArrayG.h"
 
+#include <atomic>
+#include <thread>
+
 struct ysLock;
 struct ysScene;
 
@@ -16,6 +19,7 @@ struct ysRender
         e_initialized,
         e_working,
         e_finished,
+        e_terminated,
     };
 
     struct Pixel
@@ -31,6 +35,7 @@ struct ysRender
     void DoWork();
     void GetOutputIntermediate(ysSceneRenderOutputIntermediate*) const;
     void GetOutputFinal(ysSceneRenderOutput*);
+    void Terminate();
 
     const ysScene* m_scene;
     ysSceneRenderInput m_input;
@@ -38,10 +43,11 @@ struct ysRender
     Pixel* m_pixels;
     ys_int32 m_pixelCount;
 
-    // TODO: Figure out how to allocate this on the stack.
+    // TODO: Figure out how to allocate these on the stack.
     ysLock* m_interruptLock;
+    std::thread* m_worker;
 
-    State m_state;
+    std::atomic<State> m_state;
 
     union
     {

@@ -162,7 +162,7 @@ template <typename T>
 void ysPool<T>::Free(ys_int32 index)
 {
     ysAssert(0 <= index && index < m_ceiling);
-    ysAssert(m_data[index].m_poolIndex != index);
+    ysAssert(m_data[index].m_poolIndex == index);
     m_data[index].m_poolNext = m_freeList;
     m_freeList = index;
     m_count--;

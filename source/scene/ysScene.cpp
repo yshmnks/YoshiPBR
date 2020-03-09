@@ -153,6 +153,8 @@ void ysScene::Create(const ysSceneDef& def)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysScene::Destroy()
 {
+    ysAssert(m_renders.GetCount() == 0);
+
     m_bvh.Destroy();
     ysFree(m_shapes);
     ysFree(m_triangles);
@@ -299,16 +301,12 @@ void ysScene::DoRenderWork(ysRender* target) const
     const ys_float32 height = tanf(input.m_fovY);
     const ys_float32 width = height * aspectRatio;
 
-    const ys_int32 pixelBatchCount = 16;
-    ysLock* interruptLock = target->m_interruptLock;
-    bool locked = false;
-
     ys_int32 pixelIdx = 0;
-    for (ys_int32 i = 0; i < input.m_pixelCountY; ++i)
+    for (ys_int32 i = 0; i < input.m_pixelCountY && target->m_state != ysRender::State::e_terminated; ++i)
     {
         ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input.m_pixelCountY);
         ys_float32 y = height * yFraction;
-        for (ys_int32 j = 0; j < input.m_pixelCountX; ++j)
+        for (ys_int32 j = 0; j < input.m_pixelCountX && target->m_state != ysRender::State::e_terminated; ++j)
         {
             ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input.m_pixelCountX) - 1.0f;
             ys_float32 x = width * xFraction;
@@ -324,70 +322,47 @@ void ysScene::DoRenderWork(ysRender* target) const
             ysSceneRayCastOutput rco;
             bool hit = RayCastClosest(&rco, rci);
 
-            if (interruptLock != nullptr)
             {
-                if (pixelIdx % pixelBatchCount == 0)
-                {
-                    interruptLock->Acquire();
-                    locked = true;
-                }
-            }
+                ysScopedLock(target->m_interruptLock);
 
-            ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
+                ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
 
-            switch (input.m_renderMode)
-            {
-                case ysSceneRenderInput::RenderMode::e_regular:
+                switch (input.m_renderMode)
                 {
-                    ysVec4 radiance = ysVec4_zero;
-                    if (hit)
+                    case ysSceneRenderInput::RenderMode::e_regular:
                     {
-                        ysSurfaceData surfaceData;
-                        surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
-                        surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
-                        surfaceData.m_posWS = rco.m_hitPoint;
-                        surfaceData.m_normalWS = rco.m_hitNormal;
-                        surfaceData.m_tangentWS = rco.m_hitTangent;
-                        surfaceData.m_incomingDirectionWS = -pixelDirWS;
-                        radiance = SampleRadiance(surfaceData, 0, input.m_maxBounceCount);
+                        ysVec4 radiance = ysVec4_zero;
+                        if (hit)
+                        {
+                            ysSurfaceData surfaceData;
+                            surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
+                            surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
+                            surfaceData.m_posWS = rco.m_hitPoint;
+                            surfaceData.m_normalWS = rco.m_hitNormal;
+                            surfaceData.m_tangentWS = rco.m_hitTangent;
+                            surfaceData.m_incomingDirectionWS = -pixelDirWS;
+                            radiance = SampleRadiance(surfaceData, 0, input.m_maxBounceCount);
+                        }
+                        pixel->m_value = radiance;
+                        break;
                     }
-                    pixel->m_value = radiance;
-                    break;
+                    case ysSceneRenderInput::RenderMode::e_normals:
+                    {
+                        ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
+                        pixel->m_value = normalColor;
+                        break;
+                    }
+                    case ysSceneRenderInput::RenderMode::e_depth:
+                    {
+                        ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
+                        pixel->m_value = ysSplat(depth);
+                        break;
+                    }
                 }
-                case ysSceneRenderInput::RenderMode::e_normals:
-                {
-                    ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
-                    pixel->m_value = normalColor;
-                    break;
-                }
-                case ysSceneRenderInput::RenderMode::e_depth:
-                {
-                    ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
-                    pixel->m_value = ysSplat(depth);
-                    break;
-                }
-            }
-            pixel->m_isNull = false;
-
-            if (interruptLock != nullptr)
-            {
-                if (pixelIdx % pixelBatchCount == pixelBatchCount - 1)
-                {
-                    interruptLock->Release();
-                    locked = false;
-                }
+                pixel->m_isNull = false;
             }
 
             pixelIdx++;
-        }
-    }
-
-    if (interruptLock != nullptr)
-    {
-        if (locked)
-        {
-            interruptLock->Release();
-            locked = false;
         }
     }
 }
@@ -518,7 +493,9 @@ void ysScene_DestroyRender(ysRenderId id)
     ysScene* scene = ysScene::s_scenes[id.m_sceneIdx];
 
     ysAssert(scene->m_renders[id.m_index].m_poolIndex == id.m_index);
-    scene->m_renders[id.m_index].Destroy();
+    ysRender& render = scene->m_renders[id.m_index];
+    render.Terminate();
+    render.Destroy();
     scene->m_renders.Free(id.m_index);
 }
 
