@@ -1,5 +1,6 @@
 set(YOSHIPBR_SOURCE_FILES
 	common/ysDebugDraw.cpp
+    common/ysLock.cpp
     common/ysMath.cpp
 	common/ysStructures.cpp
     geo/ysAABB.cpp
@@ -15,6 +16,8 @@ set(YOSHIPBR_SOURCE_FILES
     mat/ysMaterial.h
     mat/ysMaterialStandard.cpp
     mat/ysMaterialStandard.h
+    scene/ysRender.cpp
+    scene/ysRender.h
     scene/ysScene.cpp
     scene/ysScene.h
     )
@@ -24,6 +27,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysAABB.h
     ../include/YoshiPBR/ysArrayG.h
     ../include/YoshiPBR/ysArrayGF.h
+    ../include/YoshiPBR/ysLock.h
     ../include/YoshiPBR/ysPool.h
     ../include/YoshiPBR/ysBVH.h
 	../include/YoshiPBR/ysDebugDraw.h

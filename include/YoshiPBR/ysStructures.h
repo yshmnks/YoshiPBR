@@ -26,9 +26,18 @@ struct ysMaterialId
     ys_int32 m_index;
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysRenderId
+{
+    ys_int32 m_sceneIdx;
+    ys_int32 m_index;
+};
+
 extern const ysSceneId      ys_nullSceneId;
 extern const ysShapeId      ys_nullShapeId;
 extern const ysMaterialId   ys_nullMaterialId;
+extern const ysRenderId     ys_nullRenderId;
 
 bool operator==(const ysSceneId&, const ysSceneId&);
 bool operator!=(const ysSceneId&, const ysSceneId&);
@@ -36,6 +45,8 @@ bool operator==(const ysShapeId&, const ysShapeId&);
 bool operator!=(const ysShapeId&, const ysShapeId&);
 bool operator==(const ysMaterialId&, const ysMaterialId&);
 bool operator!=(const ysMaterialId&, const ysMaterialId&);
+bool operator==(const ysRenderId&, const ysRenderId&);
+bool operator!=(const ysRenderId&, const ysRenderId&);
 
 enum struct ysMaterialType
 {
@@ -173,6 +184,18 @@ struct ysSceneRenderOutput
     }
 
     ysArrayG<ysFloat3> m_pixels;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysSceneRenderOutputIntermediate
+{
+    ysSceneRenderOutputIntermediate()
+    {
+        m_pixels.Create();
+    }
+
+    ysArrayG<ysFloat4> m_pixels;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

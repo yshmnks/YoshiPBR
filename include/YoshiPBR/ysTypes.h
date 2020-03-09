@@ -16,6 +16,7 @@
         __debugbreak();	\
     }
 
+// TODO: How to do aligned new? Use placement new?
 #define ysNew new
 #define ysDelete(x) delete x
 #define ysDeleteArray(x) delete[] x
