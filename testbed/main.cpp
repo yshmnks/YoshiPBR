@@ -532,15 +532,34 @@ int main(int, char**)
         {
             if (s_renderId != ys_nullRenderId)
             {
-                ysSceneRenderOutputIntermediate output;
-                ysRender_GetIntermediateOutput(s_renderId, &output);
-                ysAssert(output.m_pixels.GetCount() == s_pixelCountX * s_pixelCountY);
-                for (ys_int32 i = 0; i < output.m_pixels.GetCount(); ++i)
+                if (ysRender_WorkFinished(s_renderId))
                 {
-                    const ysFloat4& rgb = output.m_pixels[i];
-                    s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, rgb.a);
+                    ysSceneRenderOutput output;
+                    ysRender_GetFinalOutput(s_renderId, &output);
+                    ysAssert(output.m_pixels.GetCount() == s_pixelCountX * s_pixelCountY);
+                    for (ys_int32 i = 0; i < output.m_pixels.GetCount(); ++i)
+                    {
+                        const ysFloat3& rgb = output.m_pixels[i];
+                        s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, 1.0f);
+                    }
+                    ysScene_DestroyRender(s_renderId);
+                    s_renderId = ys_nullRenderId;
                 }
+                else
+                {
+                    ysSceneRenderOutputIntermediate output;
+                    ysRender_GetIntermediateOutput(s_renderId, &output);
+                    ysAssert(output.m_pixels.GetCount() == s_pixelCountX * s_pixelCountY);
+                    for (ys_int32 i = 0; i < output.m_pixels.GetCount(); ++i)
+                    {
+                        const ysFloat4& rgb = output.m_pixels[i];
+                        s_pixels[i] = Color(rgb.r, rgb.g, rgb.b, rgb.a);
+                    }
+                }
+            }
 
+            if (s_pixelCountX > 0 && s_pixelCountY > 0)
+            {
                 Texture2D tex;
                 tex.m_pixels = s_pixels.GetEntries();
                 tex.m_width = s_pixelCountX;
@@ -554,6 +573,36 @@ int main(int, char**)
                 ys_float32 quadHeight = tanf(s_renderInput.m_fovY) * 2.0f;
                 ys_float32 quadWidth = quadHeight * aspectRatio;
                 g_debugDraw.DrawTexturedQuad(tex, quadWidth, quadHeight, xf, true, true);
+
+                ysVec4 a = ysMul(s_renderInput.m_eye, ysVecSet(-quadWidth * 0.5f, -quadHeight * 0.5f, -1.0f));
+                ysVec4 b = ysMul(s_renderInput.m_eye, ysVecSet(quadWidth * 0.5f, -quadHeight * 0.5f, -1.0f));
+                ysVec4 c = ysMul(s_renderInput.m_eye, ysVecSet(quadWidth * 0.5f, quadHeight * 0.5f, -1.0f));
+                ysVec4 d = ysMul(s_renderInput.m_eye, ysVecSet(-quadWidth * 0.5f, quadHeight * 0.5f, -1.0f));
+                ysVec4 e = s_renderInput.m_eye.p;
+
+                ysVec4 frustum[8][2];
+                frustum[0][0] = e;
+                frustum[0][1] = a;
+                frustum[1][0] = e;
+                frustum[1][1] = b;
+                frustum[2][0] = e;
+                frustum[2][1] = c;
+                frustum[3][0] = e;
+                frustum[3][1] = d;
+                frustum[4][0] = a;
+                frustum[4][1] = b;
+                frustum[5][0] = b;
+                frustum[5][1] = c;
+                frustum[6][0] = c;
+                frustum[6][1] = d;
+                frustum[7][0] = d;
+                frustum[7][1] = a;
+                Color colors[8];
+                for (ys_int32 i = 0; i < 8; ++i)
+                {
+                    colors[i] = Color(1.0f, 1.0f, 1.0f, 1.0f);
+                }
+                g_debugDraw.DrawSegmentList(&frustum[0][0], colors, 8);
             }
         }
 
