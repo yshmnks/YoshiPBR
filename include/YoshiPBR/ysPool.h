@@ -150,7 +150,7 @@ ys_int32 ysPool<T>::Allocate()
         ys_int32 freeIndex = m_freeList;
         m_freeList = m_data[freeIndex].m_poolNext;
         m_count++;
-        m_ceiling = ysMax(m_ceiling, freeIndex);
+        m_ceiling = ysMax(m_ceiling, freeIndex + 1);
         m_data[freeIndex].m_poolIndex = freeIndex;
         return freeIndex;
     }
