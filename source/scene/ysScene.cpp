@@ -323,7 +323,7 @@ void ysScene::DoRenderWork(ysRender* target) const
             bool hit = RayCastClosest(&rco, rci);
 
             {
-                ysScopedLock(target->m_interruptLock);
+                ysScopedLock(&target->m_interruptLock);
 
                 ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
 

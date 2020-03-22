@@ -1,7 +1,8 @@
 #pragma once
 
-#include "YoshiPBR/ysStructures.h"
 #include "YoshiPBR/ysArrayG.h"
+#include "YoshiPBR/ysLock.h"
+#include "YoshiPBR/ysStructures.h"
 
 #include <atomic>
 #include <thread>
@@ -33,7 +34,7 @@ struct ysRender
     void Destroy();
 
     void DoWork();
-    void GetOutputIntermediate(ysSceneRenderOutputIntermediate*) const;
+    void GetOutputIntermediate(ysSceneRenderOutputIntermediate*);
     void GetOutputFinal(ysSceneRenderOutput*);
     void Terminate();
 
@@ -44,7 +45,7 @@ struct ysRender
     ys_int32 m_pixelCount;
 
     // TODO: Figure out how to allocate these on the stack.
-    ysLock* m_interruptLock;
+    ysLock m_interruptLock;
     std::thread* m_worker;
 
     std::atomic<State> m_state;

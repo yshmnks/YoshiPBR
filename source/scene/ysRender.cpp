@@ -11,7 +11,7 @@ void ysRender::Reset()
     m_scene = nullptr;
     m_pixels = nullptr;
     m_pixelCount = 0;
-    m_interruptLock = nullptr;
+    m_interruptLock.Reset();
     m_state = State::e_pending;
     m_worker = nullptr;
 }
@@ -31,7 +31,7 @@ void ysRender::Create(const ysScene* scene, const ysSceneRenderInput& input)
         m_pixels[i].m_isNull = true;
     }
 
-    m_interruptLock = ysNew(ysLock);
+    m_interruptLock.Reset();
 
     m_state = State::e_initialized;
     m_worker = nullptr;
@@ -50,7 +50,6 @@ void ysRender::Destroy()
         ysDelete(m_worker);
     }
     ysFree(m_pixels);
-    ysDelete(m_interruptLock);
     Reset();
 }
 
@@ -70,12 +69,12 @@ void ysRender::DoWork()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysRender::GetOutputIntermediate(ysSceneRenderOutputIntermediate* output) const
+void ysRender::GetOutputIntermediate(ysSceneRenderOutputIntermediate* output)
 {
     ysAssert(m_state == State::e_working || m_state == State::e_finished);
     output->m_pixels.SetCount(m_pixelCount);
 
-    ysScopedLock scoped(m_interruptLock);
+    ysScopedLock scoped(&m_interruptLock);
 
     for (ys_int32 i = 0; i < m_pixelCount; ++i)
     {
