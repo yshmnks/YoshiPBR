@@ -154,6 +154,7 @@ struct ysSceneRenderInput
         m_pixelCountX = 0;
         m_pixelCountY = 0;
         m_maxBounceCount = 0;
+        m_samplesPerPixel = 16;
 
         m_renderMode = RenderMode::e_regular;
     }
@@ -170,6 +171,8 @@ struct ysSceneRenderInput
 
     // 0 is direct illumination only.
     ys_int32 m_maxBounceCount;
+
+    ys_int32 m_samplesPerPixel;
 
     RenderMode m_renderMode;
 };

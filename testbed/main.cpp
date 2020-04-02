@@ -124,6 +124,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 }
 
                 ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 8);
+                ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
 
                 const char* renderModes[] = { "Global Illumination", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
@@ -368,8 +369,8 @@ static void sCreateScene()
         triangles[2 * i + 1].m_materialTypeIndex = 0;
     }
 
-    const ys_float32 asdf = -0.75f;
-    const ys_float32 qwer = 0.1f;
+    const ys_float32 asdf = 0.8f;
+    const ys_float32 qwer = 0.5f;
     triangles[12].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf) * ysSplat(h);
     triangles[12].m_vertices[1] = ysVecSet(qwer, -qwer, asdf) * ysSplat(h);
     triangles[12].m_vertices[2] = ysVecSet(qwer, qwer, asdf) * ysSplat(h);
@@ -392,7 +393,7 @@ static void sCreateScene()
     materialStandards[1].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
     ysLightPointDef lightPoints[1];
-    lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.75f) * ysSplat(h);
+    lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.9f) * ysSplat(h);
     lightPoints[0].m_wattage = ysSplat(100.0f);
 
     ysSceneDef sceneDef;

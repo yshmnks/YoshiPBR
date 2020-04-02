@@ -148,6 +148,12 @@ ysVec4 operator+(const ysVec4&, const ysVec4&);
 ysVec4 operator-(const ysVec4&, const ysVec4&);
 ysVec4 operator*(const ysVec4&, const ysVec4&);
 ysVec4 operator/(const ysVec4&, const ysVec4&);
+ysVec4& operator+=(ysVec4&, const ysVec4&);
+ysVec4& operator-=(ysVec4&, const ysVec4&);
+ysVec4& operator*=(ysVec4&, const ysVec4&);
+ysVec4& operator/=(ysVec4&, const ysVec4&);
+bool operator==(const ysVec4&, const ysVec4&);
+bool operator!=(const ysVec4&, const ysVec4&);
 
 ysVec4 ysSplatDot4(const ysVec4&, const ysVec4&);
 ysVec4 ysSplatDot3(const ysVec4&, const ysVec4&);
@@ -184,6 +190,7 @@ ysVec4 ysMul(const ysTransform& xf, const ysVec4& p);
 ysVec4 ysMul33(const ysMtx44&, const ysVec4&);
 ysVec4 ysMulT33(const ysMtx44&, const ysVec4&);
 
+ys_float32 ysRandom(ys_float32 min, ys_float32 max);
 ysVec4 ysRandom3(const ysVec4& min, const ysVec4& max);
 ysVec4 ysRandomDir();
 ysVec4 ysRandomQuat();

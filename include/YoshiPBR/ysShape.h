@@ -1,5 +1,6 @@
 #pragma once
 
+#include "YoshiPBR/ysAABB.h"
 #include "YoshiPBR/ysStructures.h"
 
 struct ysRayCastInput;
@@ -15,6 +16,7 @@ struct ysShape
         e_triangle,
     };
 
+    ysAABB ComputeAABB(const ysScene* scene) const;
     bool RayCast(const ysScene* scene, ysRayCastOutput*, const ysRayCastInput&) const;
 
     Type m_type;

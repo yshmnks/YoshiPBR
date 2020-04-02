@@ -17,6 +17,7 @@ ysScene* ysScene::s_scenes[YOSHIPBR_MAX_SCENE_COUNT] = { nullptr };
 void ysScene::Reset()
 {
     m_bvh.Reset();
+    m_bvhEmissive.Reset();
     m_shapes = nullptr;
     m_triangles = nullptr;
     m_materials = nullptr;
@@ -100,8 +101,6 @@ void ysScene::Create(const ysSceneDef& def)
     ysAssert(shapeIdx == m_shapeCount);
 
     m_bvh.Create(aabbs, shapeIds, m_shapeCount);
-    ysFree(shapeIds);
-    ysFree(aabbs);
 
     ///////////////
     // Materials //
@@ -113,9 +112,12 @@ void ysScene::Create(const ysSceneDef& def)
     {
         ysMaterialStandard* dst = m_materialStandards + i;
         const ysMaterialStandardDef* src = def.m_materialStandards + i;
-        dst->m_albedoDiffuse = src->m_albedoDiffuse;
-        dst->m_albedoSpecular = src->m_albedoSpecular;
-        dst->m_emissiveDiffuse = src->m_emissiveDiffuse;
+        dst->m_albedoDiffuse = ysMax(src->m_albedoDiffuse, ysVec4_zero);
+        dst->m_albedoSpecular = ysMax(src->m_albedoSpecular, ysVec4_zero);
+        dst->m_emissiveDiffuse = ysMax(src->m_emissiveDiffuse, ysVec4_zero);
+        dst->m_albedoDiffuse.w = 0.0f;
+        dst->m_albedoSpecular.w = 0.0f;
+        dst->m_emissiveDiffuse.w = 0.0f;
 
         ysMaterial* material = m_materials + materialIdx;
         material->m_type = ysMaterial::Type::e_standard;
@@ -145,6 +147,28 @@ void ysScene::Create(const ysSceneDef& def)
 
     ysAssert(lightIdx == m_lightCount);
 
+    // Add emissive shapes to the special BVH
+    ys_int32 emissiveShapeCount = 0;
+    for (ys_int32 i = 0; i < m_shapeCount; ++i)
+    {
+        const ysShape* shape = m_shapes + i;
+        const ysMaterial* baseMaterial = m_materials + shape->m_materialId.m_index;
+        if (baseMaterial->m_type == ysMaterial::Type::e_standard)
+        {
+            const ysMaterialStandard* material = m_materialStandards + baseMaterial->m_typeIndex;
+            if (material->m_emissiveDiffuse == ysVec4_zero)
+            {
+                continue;
+            }
+            aabbs[emissiveShapeCount] = shape->ComputeAABB(this);
+            shapeIds[emissiveShapeCount].m_index = i;
+        }
+    }
+
+    m_bvhEmissive.Create(aabbs, shapeIds, emissiveShapeCount);
+    ysFree(shapeIds);
+    ysFree(aabbs);
+
     const ys_int32 expectedMaxRenderConcurrency = 8;
     m_renders.Create(expectedMaxRenderConcurrency);
 }
@@ -156,6 +180,7 @@ void ysScene::Destroy()
     ysAssert(m_renders.GetCount() == 0);
 
     m_bvh.Destroy();
+    m_bvhEmissive.Destroy();
     ysFree(m_shapes);
     ysFree(m_triangles);
     ysFree(m_materials);
@@ -245,7 +270,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 
     ysVec4 indirectRadiance = ysVec4_zero;
 
-    const ys_int32 sampleDirCount = 16;
+    const ys_int32 sampleDirCount = 1;
     for (ys_int32 i = 0; i < sampleDirCount; ++i)
     {
         ysVec4 outgoingDirectionLS;
@@ -297,68 +322,85 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 void ysScene::DoRenderWork(ysRender* target) const
 {
     const ysSceneRenderInput& input = target->m_input;
+    if (input.m_samplesPerPixel <= 0)
+    {
+        return;
+    }
+    ys_float32 samplesPerPixelInv = 1.0f / (ys_float32)input.m_samplesPerPixel;
+
     const ys_float32 aspectRatio = ys_float32(input.m_pixelCountX) / ys_float32(input.m_pixelCountY);
+    // These are one-sided heights and widths
     const ys_float32 height = tanf(input.m_fovY);
     const ys_float32 width = height * aspectRatio;
+    const ys_float32 pixelHeight = height / ys_float32(input.m_pixelCountY);
+    const ys_float32 pixelWidth = width / ys_float32(input.m_pixelCountX);
 
     ys_int32 pixelIdx = 0;
     for (ys_int32 i = 0; i < input.m_pixelCountY && target->m_state != ysRender::State::e_terminated; ++i)
     {
         ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input.m_pixelCountY);
-        ys_float32 y = height * yFraction;
+        ys_float32 yMid = height * yFraction;
         for (ys_int32 j = 0; j < input.m_pixelCountX && target->m_state != ysRender::State::e_terminated; ++j)
         {
             ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input.m_pixelCountX) - 1.0f;
-            ys_float32 x = width * xFraction;
-
-            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
-            ysVec4 pixelDirWS = ysRotate(input.m_eye.q, pixelDirLS);
-
-            ysSceneRayCastInput rci;
-            rci.m_maxLambda = ys_maxFloat;
-            rci.m_direction = pixelDirWS;
-            rci.m_origin = input.m_eye.p;
-
-            ysSceneRayCastOutput rco;
-            bool hit = RayCastClosest(&rco, rci);
+            ys_float32 xMid = width * xFraction;
 
             {
                 ysScopedLock(&target->m_interruptLock);
 
                 ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
+                pixel->m_value = ysVec4_zero;
 
-                switch (input.m_renderMode)
+                for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
                 {
-                    case ysSceneRenderInput::RenderMode::e_regular:
+                    ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+                    ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+
+                    ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+                    ysVec4 pixelDirWS = ysRotate(input.m_eye.q, pixelDirLS);
+
+                    ysSceneRayCastInput rci;
+                    rci.m_maxLambda = ys_maxFloat;
+                    rci.m_direction = pixelDirWS;
+                    rci.m_origin = input.m_eye.p;
+
+                    ysSceneRayCastOutput rco;
+                    bool hit = RayCastClosest(&rco, rci);
+
+                    switch (input.m_renderMode)
                     {
-                        ysVec4 radiance = ysVec4_zero;
-                        if (hit)
+                        case ysSceneRenderInput::RenderMode::e_regular:
                         {
-                            ysSurfaceData surfaceData;
-                            surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
-                            surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
-                            surfaceData.m_posWS = rco.m_hitPoint;
-                            surfaceData.m_normalWS = rco.m_hitNormal;
-                            surfaceData.m_tangentWS = rco.m_hitTangent;
-                            surfaceData.m_incomingDirectionWS = -pixelDirWS;
-                            radiance = SampleRadiance(surfaceData, 0, input.m_maxBounceCount);
+                            ysVec4 radiance = ysVec4_zero;
+                            if (hit)
+                            {
+                                ysSurfaceData surfaceData;
+                                surfaceData.m_shape = m_shapes + rco.m_shapeId.m_index;
+                                surfaceData.m_material = m_materials + surfaceData.m_shape->m_materialId.m_index;
+                                surfaceData.m_posWS = rco.m_hitPoint;
+                                surfaceData.m_normalWS = rco.m_hitNormal;
+                                surfaceData.m_tangentWS = rco.m_hitTangent;
+                                surfaceData.m_incomingDirectionWS = -pixelDirWS;
+                                radiance = SampleRadiance(surfaceData, 0, input.m_maxBounceCount);
+                            }
+                            pixel->m_value += radiance;
+                            break;
                         }
-                        pixel->m_value = radiance;
-                        break;
-                    }
-                    case ysSceneRenderInput::RenderMode::e_normals:
-                    {
-                        ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
-                        pixel->m_value = normalColor;
-                        break;
-                    }
-                    case ysSceneRenderInput::RenderMode::e_depth:
-                    {
-                        ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
-                        pixel->m_value = ysSplat(depth);
-                        break;
+                        case ysSceneRenderInput::RenderMode::e_normals:
+                        {
+                            ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
+                            pixel->m_value += normalColor;
+                            break;
+                        }
+                        case ysSceneRenderInput::RenderMode::e_depth:
+                        {
+                            ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
+                            pixel->m_value += ysSplat(depth);
+                            break;
+                        }
                     }
                 }
+                pixel->m_value *= ysSplat(samplesPerPixelInv);
                 pixel->m_isNull = false;
             }
 

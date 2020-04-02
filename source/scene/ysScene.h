@@ -47,6 +47,7 @@ struct ysScene
     void DebugDrawLights(const ysDrawInputLights&) const;
 
     ysBVH m_bvh;
+    ysBVH m_bvhEmissive;
 
     ysShape* m_shapes;
     ys_int32 m_shapeCount;
