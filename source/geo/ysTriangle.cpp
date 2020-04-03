@@ -1,4 +1,5 @@
 #include "YoshiPBR/ysTriangle.h"
+#include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysRay.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,6 +71,66 @@ bool ysTriangle::RayCast(ysRayCastOutput* output, const ysRayCastInput& input) c
     output->m_hitNormal = n;
     output->m_hitTangent = m_t;
     output->m_lambda = t;
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool ysTriangle::GenerateRandomVisibleSurfacePoint(ysSurfacePoint* point, ys_float32* probabilityDensity, const ysVec4& vantagePoint) const
+{
+    // https://mathworld.wolfram.com/TrianglePointPicking.html
+    ysVec4 u = m_v[1] - m_v[0];
+    ysVec4 v = m_v[2] - m_v[0];
+    ys_float32 a = ysRandom(0.0f, 1.0f);
+    ys_float32 b = ysRandom(0.0f, 1.0f);
+    if (a + b > 1.0f)
+    {
+        a = 1.0f - a;
+        b = 1.0f - b;
+    }
+    point->m_point = m_v[0] + ysSplat(a) * u + ysSplat(b) * v;
+    *probabilityDensity = 2.0f / ysLength3(ysCross(u, v));
+
+    ysVec4 toVantage = vantagePoint - m_v[0];
+    if (ysIsSafeToNormalize3(toVantage))
+    {
+        toVantage = ysNormalize3(toVantage);
+    }
+    else
+    {
+        return false;
+    }
+
+    const ys_float32 cosAngleThresh = sinf(ys_pi / 180.0f);
+    ys_float32 dot = ysDot3(toVantage, m_n);
+
+    if (m_twoSided)
+    {
+        if (dot < -cosAngleThresh)
+        {
+            point->m_normal = -m_n;
+            point->m_tangent = m_t;
+        }
+        else if (dot > cosAngleThresh)
+        {
+            point->m_normal = m_n;
+            point->m_tangent = m_t;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        if (dot < cosAngleThresh)
+        {
+            return false;
+        }
+        point->m_normal = m_n;
+        point->m_tangent = m_t;
+    }
 
     return true;
 }

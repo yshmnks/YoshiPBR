@@ -17,6 +17,11 @@ struct ysMaterial
     // Directions are in the local space of the surface element with [xHat, yHat, zHat] = [tangent, bitangnet, normal]
     ysVec4 EvaluateBRDF(const ysScene* scene, const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
+    // Get the radiance emitted in 'direction' from a surface element oriented with 'normal' and 'tangent'
+    ysVec4 EvaluateEmittedRadiance(const ysScene*, const ysVec4& direction, const ysVec4& normal, const ysVec4& tangent) const;
+
+    bool IsEmissive(const ysScene*) const;
+
     void GenerateRandomDirection(const ysScene* scene,
         ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
 

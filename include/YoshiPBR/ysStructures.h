@@ -153,8 +153,9 @@ struct ysSceneRenderInput
         m_fovY = 0.0f;
         m_pixelCountX = 0;
         m_pixelCountY = 0;
-        m_maxBounceCount = 0;
+        m_maxBounceCount = 5;
         m_samplesPerPixel = 16;
+        m_useRussianRouletteTermination = true;
 
         m_renderMode = RenderMode::e_regular;
     }
@@ -169,10 +170,12 @@ struct ysSceneRenderInput
     ys_int32 m_pixelCountX;
     ys_int32 m_pixelCountY;
 
-    // 0 is direct illumination only.
+    // 1 is direct illumination only.
     ys_int32 m_maxBounceCount;
 
     ys_int32 m_samplesPerPixel;
+
+    bool m_useRussianRouletteTermination;
 
     RenderMode m_renderMode;
 };

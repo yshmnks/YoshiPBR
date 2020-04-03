@@ -47,7 +47,6 @@ struct ysScene
     void DebugDrawLights(const ysDrawInputLights&) const;
 
     ysBVH m_bvh;
-    ysBVH m_bvhEmissive;
 
     ysShape* m_shapes;
     ys_int32 m_shapeCount;
@@ -66,6 +65,9 @@ struct ysScene
 
     ysLightPoint* m_lightPoints;
     ys_int32 m_lightPointCount;
+
+    ys_int32* m_emissiveShapeIndices;
+    ys_int32 m_emissiveShapeCount;
     
     ysPool<ysRender> m_renders;
 };

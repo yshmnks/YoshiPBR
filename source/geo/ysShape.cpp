@@ -39,3 +39,20 @@ bool ysShape::RayCast(const ysScene* scene, ysRayCastOutput* output, const ysRay
             return false;
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool ysShape::GenerateRandomVisibleSurfacePoint(const ysScene* scene, ysSurfacePoint* point, ys_float32* probabilityDensity, const ysVec4& vantagePoint) const
+{
+    switch (m_type)
+    {
+        case Type::e_triangle:
+        {
+            const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
+            return triangle.GenerateRandomVisibleSurfacePoint(point, probabilityDensity, vantagePoint);
+        }
+        default:
+            ysAssert(false);
+            return false;
+    }
+}
