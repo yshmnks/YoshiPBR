@@ -12,6 +12,7 @@ struct ysMaterialStandard
     bool IsEmissive() const;
 
     void GenerateRandomDirection(ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
+    ys_float32 ProbabilityDensityForGeneratedDirection(const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const;
 
     ysVec4 m_albedoDiffuse;
     ysVec4 m_albedoSpecular;

@@ -56,3 +56,20 @@ bool ysShape::GenerateRandomVisibleSurfacePoint(const ysScene* scene, ysSurfaceP
             return false;
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ys_float32 ysShape::ProbabilityDensityForGeneratedPoint(const ysScene* scene, const ysVec4& point, const ysVec4& vantagePoint) const
+{
+    switch (m_type)
+    {
+        case Type::e_triangle:
+        {
+            const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
+            return triangle.ProbabilityDensityForGeneratedPoint(point, vantagePoint);
+        }
+        default:
+            ysAssert(false);
+            return 0.0f;
+    }
+}

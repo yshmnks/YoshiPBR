@@ -233,11 +233,17 @@ struct ysScene::ysSurfaceData
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounceCount, ys_int32 maxBounceCount) const
+ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounceCount, ys_int32 maxBounceCount,
+    bool sampleLight, bool sampleBRDF) const
 {
+    ysVec4 emittedRadiance = surfaceData.m_material->EvaluateEmittedRadiance
+    (
+        this, surfaceData.m_incomingDirectionWS, surfaceData.m_normalWS, surfaceData.m_tangentWS
+    );
+
     if (bounceCount == maxBounceCount)
     {
-        return ysVec4_zero;
+        return emittedRadiance;
     }
 
     ysVec4 biTangentWS = ysCross(surfaceData.m_normalWS, surfaceData.m_tangentWS);
@@ -249,142 +255,219 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 
     ysVec4 incomingDirectionLS = ysMulT33(surfaceFrameWS, surfaceData.m_incomingDirectionWS);
 
-    ysVec4 directRadiance = ysVec4_zero;
+    // The space of directions to sample point lights is infinitesimal and therefore DISJOINT from the space of directions to sample
+    // surfaces in general (including area lights, which are simpy emissive surfaces). Hence, we assign our point light samples the full
+    // weight of 1 in the context of multiple importance sampling (MIS); similarly, the result from surface sampling gets weight 1.
+    ysVec4 pointLitRadiance = ysVec4_zero;
+    for (ys_int32 i = 0; i < m_lightPointCount; ++i)
     {
-        for (ys_int32 i = 0; i < m_lightPointCount; ++i)
+        const ysLightPoint* light = m_lightPoints + i;
+        ysVec4 surfaceToLightWS = light->m_position - surfaceData.m_posWS;
+        ys_float32 rr = ysLengthSqr3(surfaceToLightWS);
+        if (ysIsSafeToNormalize3(surfaceToLightWS) == false)
         {
-            const ysLightPoint* light = m_lightPoints + i;
-            ysVec4 surfaceToLightWS = light->m_position - surfaceData.m_posWS;
-            ys_float32 rr = ysLengthSqr3(surfaceToLightWS);
-            if (ysIsSafeToNormalize3(surfaceToLightWS) == false)
-            {
-                continue;
-            }
-            ysVec4 nSurfaceToLightWS = ysNormalize3(surfaceToLightWS);
-            ys_float32 cosTheta = ysDot3(nSurfaceToLightWS, surfaceData.m_normalWS);
-            if (cosTheta <= 0.0f)
-            {
-                continue;
-            }
-
-            ysSceneRayCastInput rci;
-            rci.m_maxLambda = 1.0f;
-            rci.m_direction = surfaceToLightWS;
-            rci.m_origin = surfaceData.m_posWS + nSurfaceToLightWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
-
-            ysSceneRayCastOutput rco;
-            bool occluded = RayCastClosest(&rco, rci);
-            if (occluded)
-            {
-                continue;
-            }
-            ysVec4 projIrradiance = light->m_radiantIntensity * ysSplat(cosTheta) / ysSplat(rr);
-            ysVec4 nSurfaceToLightLS = ysMulT33(surfaceFrameWS, nSurfaceToLightWS);
-            ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, nSurfaceToLightLS);
-            directRadiance += projIrradiance * brdf;
+            continue;
         }
-
-        for (ys_int32 i = 0; i < m_emissiveShapeCount; ++i)
+        ysVec4 nSurfaceToLightWS = ysNormalize3(surfaceToLightWS);
+        ys_float32 cosTheta = ysDot3(nSurfaceToLightWS, surfaceData.m_normalWS);
+        if (cosTheta <= 0.0f)
         {
-            ys_int32 shapeIdx = m_emissiveShapeIndices[i];
-            ysShape* shape = m_shapes + shapeIdx;
-            ysSurfacePoint shapeFrame;
-            ys_float32 probDens;
-            bool success = shape->GenerateRandomVisibleSurfacePoint(this, &shapeFrame, &probDens, surfaceData.m_posWS);
-            if (success == false)
-            {
-                continue;
-            }
-            ysAssert(probDens > 0.0f);
-
-            ysVec4 surfaceToShapeWS = shapeFrame.m_point - surfaceData.m_posWS;
-            ys_float32 rr = ysLengthSqr3(surfaceToShapeWS);
-            if (ysIsSafeToNormalize3(surfaceToShapeWS) == false)
-            {
-                continue;
-            }
-
-            ysVec4 nSurfaceToShapeWS = ysNormalize3(surfaceToShapeWS);
-            ys_float32 cosTheta = ysDot3(nSurfaceToShapeWS, surfaceData.m_normalWS);
-            if (cosTheta <= 0.0f)
-            {
-                continue;
-            }
-            ys_float32 cosThetaPrime = ysDot3(-nSurfaceToShapeWS, shapeFrame.m_normal);
-            ysAssert(cosThetaPrime > 0.0f);
-
-            ysSceneRayCastInput rci;
-            rci.m_maxLambda = 1.0f;
-            rci.m_direction = surfaceToShapeWS;
-            rci.m_origin = surfaceData.m_posWS + nSurfaceToShapeWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
-
-            ysSceneRayCastOutput rco;
-            bool occluded = RayCastClosest(&rco, rci);
-            if (occluded && rco.m_shapeId.m_index != shapeIdx)
-            {
-                continue;
-            }
-
-            ysMaterial* material = m_materials + shape->m_materialId.m_index;
-            ysVec4 emittedRadiance = material->EvaluateEmittedRadiance(this, -nSurfaceToShapeWS, shapeFrame.m_normal, shapeFrame.m_tangent);
-            if (emittedRadiance == ysVec4_zero)
-            {
-                continue;
-            }
-
-            ysVec4 nSurfaceToShapeLS = ysMulT33(surfaceFrameWS, nSurfaceToShapeWS);
-            ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, nSurfaceToShapeLS);
-            directRadiance += brdf * emittedRadiance * ysSplat(cosTheta * cosThetaPrime / rr) / ysSplat(probDens);
+            continue;
         }
-    }
-
-    ysVec4 indirectRadiance = ysVec4_zero;
-    {
-        ysVec4 outgoingDirectionLS;
-        ys_float32 probDens;
-        surfaceData.m_material->GenerateRandomDirection(this, &outgoingDirectionLS, &probDens, incomingDirectionLS);
-        ysAssert(probDens >= 0.0f);
-        if (probDens < ys_epsilon)
-        {
-            return directRadiance;
-        }
-        ysVec4 outgoingDirectionWS = ysMul33(surfaceFrameWS, outgoingDirectionLS);
 
         ysSceneRayCastInput rci;
-        rci.m_maxLambda = ys_maxFloat;
-        rci.m_direction = outgoingDirectionWS;
-        rci.m_origin = surfaceData.m_posWS + outgoingDirectionWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+        rci.m_maxLambda = 1.0f;
+        rci.m_direction = surfaceToLightWS;
+        rci.m_origin = surfaceData.m_posWS + nSurfaceToLightWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
 
         ysSceneRayCastOutput rco;
-        bool hit = RayCastClosest(&rco, rci);
-        if (hit == false)
+        bool occluded = RayCastClosest(&rco, rci);
+        if (occluded)
         {
-            return directRadiance;
+            continue;
         }
-
-        if (surfaceData.m_material->IsEmissive(this))
-        {
-            return directRadiance;
-        }
-
-        ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, outgoingDirectionLS);
-        ysVec4 cosTheta = ysSplatDot3(outgoingDirectionWS, surfaceData.m_normalWS);
-        ysAssert(ysAllGE3(brdf, ysVec4_zero));
-
-        ysSurfaceData otherSurface;
-        otherSurface.m_shape = m_shapes + rco.m_shapeId.m_index;
-        otherSurface.m_material = m_materials + otherSurface.m_shape->m_materialId.m_index;
-        otherSurface.m_posWS = rco.m_hitPoint;
-        otherSurface.m_normalWS = rco.m_hitNormal;
-        otherSurface.m_tangentWS = rco.m_hitTangent;
-        otherSurface.m_incomingDirectionWS = -outgoingDirectionWS;
-
-        ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount);
-        ysAssert(ysAllGE3(irradiance, ysVec4_zero));
-        indirectRadiance += brdf * irradiance * cosTheta / ysSplat(probDens);
+        ysVec4 projIrradiance = light->m_radiantIntensity * ysSplat(cosTheta) / ysSplat(rr);
+        ysVec4 nSurfaceToLightLS = ysMulT33(surfaceFrameWS, nSurfaceToLightWS);
+        ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, nSurfaceToLightLS);
+        pointLitRadiance += projIrradiance * brdf;
     }
 
-    return directRadiance + indirectRadiance;
+    ysVec4 surfaceLitRadiance = ysVec4_zero;
+    {
+        // For MIS, we adopt the recommended approach in Chapter 8 of Veach's thesis: the standard balance heuristic with added power
+        // heuristic (exponent = 2) to boost low variance strategies. We use a single sample per strategy, with strategies as follows:
+        // - Pick a direction on the hemisphere at the current location (this corresponds to a single strategy).
+        // - Pick a point on the surface of each emissive shape that, barring occlusion by other scene geometry, is visible from the current
+        //   point. This corresponds to up to m_emissiveShapeCount strategies. As each shape is DISJOINT from the others, we assign them all
+        //   weight 1 IF the aforementioned sample by direction (ignoring all occlusion) does not intersect any of these shapes... otherwise
+        //   we employ the powered-balance-heuristic to weight the estimators between point/direction sampling.
+
+        // Sample the hemisphere (ideally according to the BRDF*cosine)
+        ysVec4 surfaceLitRadiance_dir = ysVec4_zero;
+
+        ysVec4 outgoingDirectionWS;
+        ys_float32 pAngle_dir;
+        if (sampleBRDF)
+        {
+            ysVec4 outgoingDirectionLS;
+            surfaceData.m_material->GenerateRandomDirection(this, &outgoingDirectionLS, &pAngle_dir, incomingDirectionLS);
+            ysAssert(pAngle_dir >= 0.0f);
+            outgoingDirectionWS = ysMul33(surfaceFrameWS, outgoingDirectionLS);
+            if (pAngle_dir >= ys_epsilon) // Prevent division by zero
+            {
+                ysSceneRayCastInput rci;
+                rci.m_maxLambda = ys_maxFloat;
+                rci.m_direction = outgoingDirectionWS;
+                rci.m_origin = surfaceData.m_posWS + outgoingDirectionWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+
+                ysSceneRayCastOutput rco;
+                bool hit = RayCastClosest(&rco, rci);
+                if (hit)
+                {
+                    ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, outgoingDirectionLS);
+                    ysVec4 cosTheta = ysSplatDot3(outgoingDirectionWS, surfaceData.m_normalWS);
+                    ysAssert(ysAllGE3(brdf, ysVec4_zero));
+
+                    ysSurfaceData otherSurface;
+                    otherSurface.m_shape = m_shapes + rco.m_shapeId.m_index;
+                    otherSurface.m_material = m_materials + otherSurface.m_shape->m_materialId.m_index;
+                    otherSurface.m_posWS = rco.m_hitPoint;
+                    otherSurface.m_normalWS = rco.m_hitNormal;
+                    otherSurface.m_tangentWS = rco.m_hitTangent;
+                    otherSurface.m_incomingDirectionWS = -outgoingDirectionWS;
+
+                    ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount, sampleLight, sampleBRDF);
+                    ysAssert(ysAllGE3(irradiance, ysVec4_zero));
+                    surfaceLitRadiance_dir = brdf * irradiance * cosTheta / ysSplat(pAngle_dir);
+                }
+            }
+        }
+
+        bool dirPtSamplingAreDisjoint = true;
+        ys_float32 weight_dir = 0.0f;
+
+        const ysVec4& x_src = surfaceData.m_posWS;
+        const ysVec4& n_src = surfaceData.m_normalWS;
+        if (sampleLight)
+        {
+            for (ys_int32 i = 0; i < m_emissiveShapeCount; ++i)
+            {
+                // Sample each emissive shape
+
+                const ys_int32& shapeIdx_src = m_emissiveShapeIndices[i];
+                ysShape* shape_src = m_shapes + shapeIdx_src;
+                ysSurfacePoint frame_src;
+                ys_float32 pArea_pt;
+                bool success = shape_src->GenerateRandomVisibleSurfacePoint(this, &frame_src, &pArea_pt, x_src);
+                if (success == false)
+                {
+                    continue;
+                }
+                ysAssert(pArea_pt > 0.0f);
+                const ysVec4& x_dst = frame_src.m_point;
+                const ysVec4& n_dst = frame_src.m_normal;
+                ysVec4 v_src_dst = x_dst - x_src;
+                if (ysIsSafeToNormalize3(v_src_dst) == false)
+                {
+                    continue;
+                }
+                ys_float32 rr = ysLengthSqr3(v_src_dst);
+                ysVec4 w_src_dst = ysNormalize3(v_src_dst);
+                ysVec4 w_dst_src = -w_src_dst;
+                ys_float32 cos_dst = ysDot3(w_dst_src, n_dst);
+                ysAssert(cos_dst > 0.0f);
+                if (cos_dst < ys_epsilon)
+                {
+                    // Prevent division by zero
+                    continue;
+                }
+                // Convert probability density from 'per area' to 'per solid angle'
+                ys_float32 pAngle_pt = pArea_pt * rr / cos_dst;
+                if (pAngle_pt < ys_epsilon)
+                {
+                    // Prevent division by zero
+                    continue;
+                }
+
+                ys_float32 weight_pt = 1.0f;
+                if (sampleBRDF)
+                {
+                    ysRayCastInput rci;
+                    rci.m_maxLambda = ys_maxFloat;
+                    rci.m_direction = outgoingDirectionWS;
+                    rci.m_origin = x_dst + outgoingDirectionWS * ysSplat(0.001f);
+
+                    ysRayCastOutput rco;
+                    bool samplingTechniquesOverlap = shape_src->RayCast(this, &rco, rci);
+                    if (samplingTechniquesOverlap)
+                    {
+                        ysVec4 wLS_src_dst = ysMulT33(surfaceFrameWS, w_src_dst);
+                        ys_float32 pAngleTmp_dir = surfaceData.m_material->ProbabilityDensityForGeneratedDirection(this, wLS_src_dst, incomingDirectionLS);
+                        ys_float32 pAngleSqr_pt = pAngle_pt * pAngle_pt; // power heuristic with exponent 2
+                        //weight_pt = pAngleSqr_pt / (pAngleSqr_pt + pAngleTmp_dir * pAngleTmp_dir);
+                        weight_pt = pAngle_pt / (pAngle_pt + pAngleTmp_dir);
+
+                        ys_float32 pAreaTmp_pt = shape_src->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint, x_dst);
+                        ysVec4 vTmp = x_dst - rco.m_hitPoint;
+                        ysVec4 wTmp = ysNormalize3(vTmp);
+                        ys_float32 cosTmp = ysDot3(wTmp, rco.m_hitNormal);
+                        //ysAssert(cosTmp >= 0.0f);
+                        if (cosTmp > ys_epsilon)
+                        {
+                            ys_float32 pAngleTmp_pt = pAreaTmp_pt * ysLengthSqr3(vTmp) / cosTmp;
+                            ys_float32 pAngleSqr_dir = pAngle_dir * pAngle_dir;
+                            //weight_dir += pAngleSqr_dir / (pAngleSqr_dir + pAngleTmp_pt * pAngleTmp_pt);
+                            weight_dir += pAngle_dir / (pAngle_dir + pAngleTmp_pt);
+                        }
+
+                        dirPtSamplingAreDisjoint = false;
+                    }
+                }
+
+                ys_float32 cos_src = ysDot3(w_src_dst, n_src);
+                if (cos_src <= 0.0f)
+                {
+                    continue;
+                }
+
+                ysSceneRayCastInput srci;
+                srci.m_maxLambda = 1.0f;
+                srci.m_direction = v_src_dst;
+                srci.m_origin = x_src + w_src_dst * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+
+                ysSceneRayCastOutput srco;
+                bool occluded = RayCastClosest(&srco, srci);
+                if (occluded && srco.m_shapeId.m_index != shapeIdx_src)
+                {
+                    continue;
+                }
+                ysVec4 wLS_src_dst = ysMulT33(surfaceFrameWS, w_src_dst);
+                ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, incomingDirectionLS, wLS_src_dst);
+                ysAssert(ysAllGE3(brdf, ysVec4_zero));
+
+                ysSurfaceData otherSurface;
+                otherSurface.m_shape = shape_src;
+                otherSurface.m_material = m_materials + shape_src->m_materialId.m_index;
+                otherSurface.m_posWS = x_src;
+                otherSurface.m_normalWS = n_src;
+                otherSurface.m_tangentWS = frame_src.m_tangent;
+                otherSurface.m_incomingDirectionWS = w_dst_src;
+
+                ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount, sampleLight, sampleBRDF);
+                ysAssert(ysAllGE3(irradiance, ysVec4_zero));
+                surfaceLitRadiance += ysSplat(weight_pt) * (brdf * irradiance * ysSplat(cos_dst / pAngle_pt));
+            }
+        }
+
+        if (dirPtSamplingAreDisjoint)
+        {
+            ysAssert(weight_dir == 0.0f);
+            weight_dir = 1.0f;
+        }
+        surfaceLitRadiance += ysSplat(weight_dir) * surfaceLitRadiance_dir;
+    }
+
+    return emittedRadiance + pointLitRadiance + surfaceLitRadiance;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -397,6 +480,14 @@ void ysScene::DoRenderWork(ysRender* target) const
         return;
     }
     ys_float32 samplesPerPixelInv = 1.0f / (ys_float32)input.m_samplesPerPixel;
+
+    bool sampleLight = input.m_sampleLight;
+    bool sampleBRDF = input.m_sampleBRDF;
+    if (sampleLight == false && sampleBRDF == false)
+    {
+        sampleLight = true;
+        sampleBRDF = true;
+    }
 
     const ys_float32 aspectRatio = ys_float32(input.m_pixelCountX) / ys_float32(input.m_pixelCountY);
     // These are one-sided heights and widths
@@ -447,8 +538,6 @@ void ysScene::DoRenderWork(ysRender* target) const
                                 const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
                                 const ysMaterial* material = m_materials + shape->m_materialId.m_index;
 
-                                radiance += material->EvaluateEmittedRadiance(this, -pixelDirWS, rco.m_hitNormal, rco.m_hitTangent);
-
                                 ysSurfaceData surfaceData;
                                 surfaceData.m_shape = shape;
                                 surfaceData.m_material = material;
@@ -457,7 +546,7 @@ void ysScene::DoRenderWork(ysRender* target) const
                                 surfaceData.m_tangentWS = rco.m_hitTangent;
                                 surfaceData.m_incomingDirectionWS = -pixelDirWS;
 
-                                radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount);
+                                radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, sampleLight, sampleBRDF);
                             }
                             pixel->m_value += radiance;
                             break;

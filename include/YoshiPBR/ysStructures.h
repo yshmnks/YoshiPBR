@@ -153,8 +153,10 @@ struct ysSceneRenderInput
         m_fovY = 0.0f;
         m_pixelCountX = 0;
         m_pixelCountY = 0;
-        m_maxBounceCount = 5;
+        m_maxBounceCount = 1;
         m_samplesPerPixel = 16;
+        m_sampleLight = true;
+        m_sampleBRDF = true;
         m_useRussianRouletteTermination = true;
 
         m_renderMode = RenderMode::e_regular;
@@ -174,6 +176,11 @@ struct ysSceneRenderInput
     ys_int32 m_maxBounceCount;
 
     ys_int32 m_samplesPerPixel;
+
+    // Sampling strategies. If multiple strategies are enabled, the results are combined via multiple importance sampling.
+    // If no strategies are enabled, then it is assumed that all strategies should be employed.
+    bool m_sampleLight;
+    bool m_sampleBRDF;
 
     bool m_useRussianRouletteTermination;
 

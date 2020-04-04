@@ -25,6 +25,9 @@ struct ysMaterial
     void GenerateRandomDirection(const ysScene* scene,
         ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
 
+    ys_float32 ProbabilityDensityForGeneratedDirection(const ysScene*,
+        const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const;
+
     Type m_type;
     ys_int32 m_typeIndex;
 };

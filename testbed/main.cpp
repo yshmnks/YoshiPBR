@@ -125,6 +125,8 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 
                 ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
                 ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
+                ImGui::Checkbox("Sample Light", &s_renderInput.m_sampleLight);
+                ImGui::Checkbox("Sample BRDF", &s_renderInput.m_sampleBRDF);
 
                 const char* renderModes[] = { "Global Illumination", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
