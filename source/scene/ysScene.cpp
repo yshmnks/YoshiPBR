@@ -311,40 +311,42 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
         //   we employ the powered-balance-heuristic to weight the estimators between point/direction sampling.
 
         // Sample the hemisphere (ideally according to the BRDF*cosine)
+        // Naming Scheme: suffix '_dir' indicates that a variable is the result of randomly sampling the hemisphere of directions.
+        //                suffix '_pt'  indicates that a variable is the result of randomly sampling surface(s) in the scene.
         ysVec4 surfaceLitRadiance_dir = ysVec4_zero;
 
-        ysVec4 outgoingDirectionWS;
+        ysVec4 v_10_dir;
         ys_float32 pAngle_dir;
         if (sampleBRDF)
         {
-            ysVec4 outgoingDirectionLS;
-            surfaceData.m_material->GenerateRandomDirection(this, &outgoingDirectionLS, &pAngle_dir, w_12_LS1);
+            ysVec4 v_10_LS1_dir;
+            mat_1->GenerateRandomDirection(this, &v_10_LS1_dir, &pAngle_dir, w_12_LS1);
             ysAssert(pAngle_dir >= 0.0f);
-            outgoingDirectionWS = ysMul33(R_1, outgoingDirectionLS);
+            v_10_dir = ysMul33(R_1, v_10_LS1_dir);
             if (pAngle_dir >= ys_epsilon) // Prevent division by zero
             {
-                ysSceneRayCastInput rci;
-                rci.m_maxLambda = ys_maxFloat;
-                rci.m_direction = outgoingDirectionWS;
-                rci.m_origin = surfaceData.m_posWS + outgoingDirectionWS * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+                ysSceneRayCastInput srci;
+                srci.m_maxLambda = ys_maxFloat;
+                srci.m_direction = v_10_dir;
+                srci.m_origin = x_1 + v_10_dir * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
 
-                ysSceneRayCastOutput rco;
-                bool hit = RayCastClosest(&rco, rci);
+                ysSceneRayCastOutput srco;
+                bool hit = RayCastClosest(&srco, srci);
                 if (hit)
                 {
-                    ysVec4 brdf = surfaceData.m_material->EvaluateBRDF(this, w_12_LS1, outgoingDirectionLS);
-                    ysVec4 cosTheta = ysSplatDot3(outgoingDirectionWS, surfaceData.m_normalWS);
+                    ysVec4 brdf = mat_1->EvaluateBRDF(this, w_12_LS1, v_10_LS1_dir);
+                    ysVec4 cosTheta = ysSplatDot3(v_10_dir, n_1);
                     ysAssert(ysAllGE3(brdf, ysVec4_zero));
 
-                    ysSurfaceData otherSurface;
-                    otherSurface.m_shape = m_shapes + rco.m_shapeId.m_index;
-                    otherSurface.m_material = m_materials + otherSurface.m_shape->m_materialId.m_index;
-                    otherSurface.m_posWS = rco.m_hitPoint;
-                    otherSurface.m_normalWS = rco.m_hitNormal;
-                    otherSurface.m_tangentWS = rco.m_hitTangent;
-                    otherSurface.m_incomingDirectionWS = -outgoingDirectionWS;
+                    ysSurfaceData surface_0;
+                    surface_0.m_shape = m_shapes + srco.m_shapeId.m_index;
+                    surface_0.m_material = m_materials + surface_0.m_shape->m_materialId.m_index;
+                    surface_0.m_posWS = srco.m_hitPoint;
+                    surface_0.m_normalWS = srco.m_hitNormal;
+                    surface_0.m_tangentWS = srco.m_hitTangent;
+                    surface_0.m_incomingDirectionWS = -v_10_dir;
 
-                    ysVec4 irradiance = SampleRadiance(otherSurface, bounceCount + 1, maxBounceCount, sampleLight, sampleBRDF);
+                    ysVec4 irradiance = SampleRadiance(surface_0, bounceCount + 1, maxBounceCount, sampleLight, sampleBRDF);
                     ysAssert(ysAllGE3(irradiance, ysVec4_zero));
                     surfaceLitRadiance_dir = brdf * irradiance * cosTheta / ysSplat(pAngle_dir);
                 }
@@ -400,15 +402,15 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                 {
                     ysRayCastInput rci;
                     rci.m_maxLambda = ys_maxFloat;
-                    rci.m_direction = outgoingDirectionWS;
-                    rci.m_origin = x_1 + outgoingDirectionWS * ysSplat(0.001f);
+                    rci.m_direction = v_10_dir;
+                    rci.m_origin = x_1 + v_10_dir * ysSplat(0.001f);
 
                     ysRayCastOutput rco;
                     bool samplingTechniquesOverlap = shape_0->RayCast(this, &rco, rci);
                     if (samplingTechniquesOverlap)
                     {
                         ysVec4 wLS_10 = ysMulT33(R_1, w_10);
-                        ys_float32 pAngleTmp_dir = surfaceData.m_material->ProbabilityDensityForGeneratedDirection(this, wLS_10, w_12_LS1);
+                        ys_float32 pAngleTmp_dir = mat_1->ProbabilityDensityForGeneratedDirection(this, wLS_10, w_12_LS1);
                         ys_float32 pAngleSqr_pt = pAngle_pt * pAngle_pt; // power heuristic with exponent 2
                         weight_pt = pAngleSqr_pt / (pAngleSqr_pt + pAngleTmp_dir * pAngleTmp_dir);
 
