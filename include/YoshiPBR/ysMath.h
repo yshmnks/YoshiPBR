@@ -165,6 +165,8 @@ ys_float32 ysLength4(const ysVec4&);
 ys_float32 ysLength3(const ysVec4&);
 bool ysIsSafeToNormalize4(const ysVec4&); // We are pretty strict. Squared norm must be larger than eps^2
 bool ysIsSafeToNormalize3(const ysVec4&);
+bool ysIsApproximatelyNormalized4(const ysVec4&);
+bool ysIsApproximatelyNormalized3(const ysVec4&);
 ysVec4 ysNormalize4(const ysVec4&);
 ysVec4 ysNormalize3(const ysVec4&);
 ysVec4 ysCross(const ysVec4&, const ysVec4&);

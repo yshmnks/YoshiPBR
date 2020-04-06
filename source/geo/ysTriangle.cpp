@@ -134,3 +134,38 @@ bool ysTriangle::GenerateRandomVisibleSurfacePoint(ysSurfacePoint* point, ys_flo
 
     return true;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ys_float32 ysTriangle::ProbabilityDensityForGeneratedPoint(const ysVec4& point, const ysVec4& vantagePoint) const
+{
+    ysVec4 toVantage = vantagePoint - m_v[0];
+    if (ysIsSafeToNormalize3(toVantage))
+    {
+        toVantage = ysNormalize3(toVantage);
+    }
+    else
+    {
+        return 0.0f;
+    }
+
+    const ys_float32 cosAngleThresh = sinf(ys_pi / 180.0f);
+    ys_float32 dot = ysDot3(toVantage, m_n);
+
+    if (m_twoSided)
+    {
+        if (-cosAngleThresh < dot && dot < cosAngleThresh)
+        {
+            return 0.0f;
+        }
+    }
+    else
+    {
+        if (dot < cosAngleThresh)
+        {
+            return 0.0f;
+        }
+    }
+
+    return 2.0f / ysLength3(ysCross(m_v[1] - m_v[0], m_v[2] - m_v[0]));
+}

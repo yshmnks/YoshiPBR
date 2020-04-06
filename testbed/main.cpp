@@ -125,6 +125,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 
                 ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
                 ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
+                ImGui::Checkbox("Sample Light", &s_renderInput.m_sampleLight);
 
                 const char* renderModes[] = { "Global Illumination", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
@@ -448,7 +449,7 @@ int main(int, char**)
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    ys_int32 windowHeight = 800;
+    ys_int32 windowHeight = 300;
     ys_int32 windowWidth = ys_int32((ys_float32)windowHeight * g_camera.m_aspectRatio);
     g_mainWindow = glfwCreateWindow(windowWidth, windowHeight, "YoshiPBR TestBed", nullptr, nullptr);
     if (g_mainWindow == nullptr)

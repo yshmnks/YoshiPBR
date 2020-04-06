@@ -153,8 +153,9 @@ struct ysSceneRenderInput
         m_fovY = 0.0f;
         m_pixelCountX = 0;
         m_pixelCountY = 0;
-        m_maxBounceCount = 5;
+        m_maxBounceCount = 1;
         m_samplesPerPixel = 16;
+        m_sampleLight = true;
         m_useRussianRouletteTermination = true;
 
         m_renderMode = RenderMode::e_regular;
@@ -174,6 +175,10 @@ struct ysSceneRenderInput
     ys_int32 m_maxBounceCount;
 
     ys_int32 m_samplesPerPixel;
+
+    // We always generate directions based on the BRDF. However, sometimes generating directions by sampling points on area lights may give
+    // lower variance. Enable this if you wish to sample the lights directly; the results will be combined via Multiple Importance Sampling.
+    bool m_sampleLight;
 
     bool m_useRussianRouletteTermination;
 
