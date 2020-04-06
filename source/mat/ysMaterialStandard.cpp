@@ -41,5 +41,5 @@ void ysMaterialStandard::GenerateRandomDirection(ysVec4* outgoingLS, ys_float32*
 ys_float32 ysMaterialStandard::ProbabilityDensityForGeneratedDirection(const ysVec4& outLS, const ysVec4& inLS) const
 {
     ysAssert(ysAbs(ysLength3(outLS) - 1.0f) < 0.001f)
-    return outLS.z / ys_pi;
+    return ysMax(outLS.z, 0.0f) / ys_pi;
 }

@@ -69,6 +69,8 @@ void ysMaterial::GenerateRandomDirection(const ysScene* scene,
         default:
             ysAssert(false);
     }
+    ysAssert(*probabilityDensity >= 0.0f);
+    ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*outgoingDirectionLS));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,15 +78,22 @@ void ysMaterial::GenerateRandomDirection(const ysScene* scene,
 ys_float32 ysMaterial::ProbabilityDensityForGeneratedDirection(const ysScene* scene,
     const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const
 {
+    ys_float32 probDens;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            return subMat.ProbabilityDensityForGeneratedDirection(outgoingDirectionLS, incomingDirectionLS);
+            probDens = subMat.ProbabilityDensityForGeneratedDirection(outgoingDirectionLS, incomingDirectionLS);
+            break;
         }
         default:
+        {
             ysAssert(false);
-            return 0.0f;
+            probDens = 0.0f;
+            break;
+        }
     }
+    ysAssert(probDens >= 0.0f);
+    return probDens;
 }
