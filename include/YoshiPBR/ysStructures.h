@@ -147,6 +147,12 @@ struct ysSceneRenderInput
         e_depth,
     };
 
+    enum GlobalIlluminationMethod
+    {
+        e_uniDirectional,
+        e_biDirectional,
+    };
+
     ysSceneRenderInput()
     {
         m_eye = ysTransform_identity;
@@ -159,6 +165,7 @@ struct ysSceneRenderInput
         m_useRussianRouletteTermination = true;
 
         m_renderMode = RenderMode::e_regular;
+        m_giMethod = GlobalIlluminationMethod::e_uniDirectional;
     }
 
     // For identity-eye-orientation, the eye looks down the -z axis (such that the x axis points right and y axis points up).
@@ -178,11 +185,13 @@ struct ysSceneRenderInput
 
     // We always generate directions based on the BRDF. However, sometimes generating directions by sampling points on area lights may give
     // lower variance. Enable this if you wish to sample the lights directly; the results will be combined via Multiple Importance Sampling.
+    // (Irrelevant for bidirectional path tracing as one of the two paths already starts at lights)
     bool m_sampleLight;
 
     bool m_useRussianRouletteTermination;
 
     RenderMode m_renderMode;
+    GlobalIlluminationMethod m_giMethod;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

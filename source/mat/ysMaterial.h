@@ -20,10 +20,15 @@ struct ysMaterial
     // Get the radiance emitted in 'direction' from a surface element oriented with 'normal' and 'tangent'
     ysVec4 EvaluateEmittedRadiance(const ysScene*, const ysVec4& direction, const ysVec4& normal, const ysVec4& tangent) const;
 
+    // Get the emitted irradiance. This is the integral of the emitted radiance over all projected solid angles.
+    ysVec4 EvaluateEmittedIrradiance(const ysScene*) const;
+
     bool IsEmissive(const ysScene*) const;
 
     void GenerateRandomDirection(const ysScene* scene,
         ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
+
+    void GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS, ys_float32* probabilityDensity) const;
 
     ys_float32 ProbabilityDensityForGeneratedDirection(const ysScene*,
         const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const;

@@ -77,6 +77,46 @@ bool ysTriangle::RayCast(ysRayCastOutput* output, const ysRayCastInput& input) c
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysTriangle::GenerateRandomSurfacePoint(ysSurfacePoint* point, ys_float32* probabilityDensity) const
+{
+    // https://mathworld.wolfram.com/TrianglePointPicking.html
+    ysVec4 u = m_v[1] - m_v[0];
+    ysVec4 v = m_v[2] - m_v[0];
+    ys_float32 a = ysRandom(0.0f, 1.0f);
+    ys_float32 b = ysRandom(0.0f, 1.0f);
+    if (m_twoSided)
+    {
+        if (a + b > 1.0f)
+        {
+            a = 1.0f - a;
+            b = 1.0f - b;
+            point->m_normal = -m_n;
+            point->m_tangent = m_t;
+        }
+        else
+        {
+            point->m_normal = m_n;
+            point->m_tangent = m_t;
+        }
+        point->m_point = m_v[0] + ysSplat(a) * u + ysSplat(b) * v;
+        *probabilityDensity = 1.0f / ysLength3(ysCross(u, v));
+    }
+    else
+    {
+        if (a + b > 1.0f)
+        {
+            a = 1.0f - a;
+            b = 1.0f - b;
+        }
+        point->m_normal = m_n;
+        point->m_tangent = m_t;
+        point->m_point = m_v[0] + ysSplat(a) * u + ysSplat(b) * v;
+        *probabilityDensity = 2.0f / ysLength3(ysCross(u, v));
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool ysTriangle::GenerateRandomVisibleSurfacePoint(ysSurfacePoint* point, ys_float32* probabilityDensity, const ysVec4& vantagePoint) const
 {
     // https://mathworld.wolfram.com/TrianglePointPicking.html
