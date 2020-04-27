@@ -133,3 +133,27 @@ ys_float32 ysMaterial::ProbabilityDensityForGeneratedDirection(const ysScene* sc
     ysAssert(probDens >= 0.0f);
     return probDens;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ys_float32 ysMaterial::ProbabilityDensityForGeneratedEmission(const ysScene* scene, const ysVec4& emittedDirectionLS) const
+{
+    ys_float32 probDens;
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            probDens = subMat.ProbabilityDensityForGeneratedEmission(emittedDirectionLS);
+            break;
+        }
+        default:
+        {
+            ysAssert(false);
+            probDens = 0.0f;
+            break;
+        }
+    }
+    ysAssert(probDens >= 0.0f);
+    return probDens;
+}

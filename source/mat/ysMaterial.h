@@ -33,6 +33,8 @@ struct ysMaterial
     ys_float32 ProbabilityDensityForGeneratedDirection(const ysScene*,
         const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const;
 
+    ys_float32 ProbabilityDensityForGeneratedEmission(const ysScene*, const ysVec4& emittedDirectionLS) const;
+
     Type m_type;
     ys_int32 m_typeIndex;
 };

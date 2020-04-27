@@ -838,6 +838,9 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         }
     }
 
+    //////////////////////////////
+    // Generate the EYE subpath //
+    //////////////////////////////
     z[0] = args.eyePathVertex0;
     z[1] = args.eyePathVertex1;
     ysAssert(t == 2);
@@ -928,6 +931,82 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         z2->m_projToArea1 = -1.0f;
 
         t++;
+    }
+
+    /////////////////////////////////
+    // Join light and eye subpaths //
+    /////////////////////////////////
+    ysAssert(s > 0 && t > 1);
+    PathVertex* x1 = y + (s - 1); // The last vertex on the light path
+    PathVertex* x2 = z + (t - 1); // The last vertex on the  eye  path
+    {
+        ysVec4 v12 = x2->m_posWS - x1->m_posWS;
+        ys_float32 d12Sqr = ysLengthSqr3(v12);
+        if (d12Sqr < divZeroThresh)
+        {
+            // What about the other connections?
+            return ysVec4_zero;
+        }
+
+        ysMtx44 R1;
+        {
+            R1.cx = x1->m_tangentWS;
+            R1.cy = ysCross(x1->m_normalWS, x1->m_tangentWS);
+            R1.cz = x1->m_normalWS;
+        }
+
+        ysMtx44 R2;
+        {
+            R2.cx = x2->m_tangentWS;
+            R2.cy = ysCross(x2->m_normalWS, x2->m_tangentWS);
+            R2.cz = x2->m_normalWS;
+        }
+
+        ysVec4 u12 = ysNormalize3(v12);
+        ysVec4 u12_LS1 = ysMulT33(R1, u12);
+        ysVec4 u21_LS2 = ysMulT33(R2, -u12);
+        if (u12_LS1.z < divZeroThresh || u21_LS2.z < divZeroThresh)
+        {
+            // What about the other connections?
+            return ysVec4_zero;
+        }
+
+        ys_float32 g = u12_LS1.z * u21_LS2.z / d12Sqr;
+        x1->m_projToArea1 = g;
+        x2->m_projToArea1 = g;
+
+        if (s == 1)
+        {
+            ysAssert(x1->m_material->IsEmissive(this));
+            ysVec4 LSpatial = x1->m_material->EvaluateEmittedIrradiance(this);
+            ysVec4 L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
+            ys_float32 probAngle12 = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
+            x1->m_probProj[1] = probAngle12 / u12_LS1.z;
+            x1->m_f = L / LSpatial;
+        }
+        else
+        {
+            ysAssert(s > 1);
+            PathVertex* x0 = y + (s - 2);
+            ysVec4 v10 = x0->m_posWS - x1->m_posWS;
+            ysVec4 u10 = ysNormalize3(v10);
+            ysVec4 u10_LS1 = ysMulT33(R1, u10);
+            ys_float32 probAngle012 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u12_LS1, u10_LS1);
+            ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1);
+            x1->m_probProj[0] = probAngle210 / u10_LS1.z;
+            x1->m_probProj[1] = probAngle012 / u12_LS1.z;
+            x1->m_f = x1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
+        }
+
+        PathVertex* x3 = z + (t - 2);
+        ysVec4 v23 = x3->m_posWS - x2->m_posWS;
+        ysVec4 u23 = ysNormalize3(v23);
+        ysVec4 u23_LS2 = ysMulT33(R2, u23);
+        ys_float32 probAngle123 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u23_LS2, u21_LS2);
+        ys_float32 probAngle321 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
+        x1->m_probProj[0] = probAngle123 / u23_LS2.z;
+        x1->m_probProj[1] = probAngle321 / u21_LS2.z;
+        x1->m_f = x1->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
     }
 
     return ysVec4_zero;
