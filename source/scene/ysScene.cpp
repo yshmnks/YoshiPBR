@@ -771,7 +771,6 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             s++;
         }
 
-        bool terminated = false;
         while (s < sMax)
         {
             const PathVertex* y0 = y + (s - 2);
@@ -804,8 +803,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
                 ys_float32 f = ysMax(ysMax(f012.x, f012.y), f012.z);
                 ys_float32 q = ysMin(1.0f, f / probProj012);
                 ys_float32 r = ysRandom(0.0f, 1.0f);
-                terminated = (r > q);
-                if (terminated)
+                bool absorbed = (r > q);
+                if (absorbed)
                 {
                     break;
                 }
@@ -867,10 +866,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             s++;
         }
 
-        if (terminated)
-        {
-            break;
-        }
+        break;
     }
 
     //////////////////////////////
@@ -984,6 +980,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
         z2->m_probProj[0] = -1.0f;
         z2->m_probProj[1] = -1.0f;
+        z2->m_probFinite[0] = false;
+        z2->m_probFinite[1] = false;
         z2->m_projToArea1 = -1.0f;
         z2->m_f = -ysVec4_one;
 
