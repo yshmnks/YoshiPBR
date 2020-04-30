@@ -1026,6 +1026,23 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             return ysVec4_zero;
         }
 
+        ysSceneRayCastInput srci;
+        srci.m_origin = x1->m_posWS + u12 * ysSplat(rayCastNudge);
+        srci.m_direction = v12;
+        srci.m_maxLambda = ysLength3(v12) - rayCastNudge;
+
+        ysSceneRayCastOutput srco;
+        bool hit = RayCastClosest(&srco, srci);
+        if (hit)
+        {
+            ysShape* hitShape = m_shapes + srco.m_shapeId.m_index;
+            bool occluded = (hitShape != x2->m_shape);
+            if (occluded)
+            {
+                return ysVec4_zero;
+            }
+        }
+
         ys_float32 g = u12_LS1.z * u21_LS2.z / d12Sqr;
         x1->m_projToArea1 = g;
         x2->m_projToArea1 = g;
@@ -1037,6 +1054,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ysVec4 L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
             ys_float32 probAngle12 = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
             x1->m_probProj[1] = probAngle12 / u12_LS1.z;
+            x1->m_probFinite[1] = true;
             x1->m_f = L / LSpatial;
         }
         else
@@ -1050,6 +1068,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1);
             x1->m_probProj[0] = probAngle210 / u10_LS1.z;
             x1->m_probProj[1] = probAngle012 / u12_LS1.z;
+            x1->m_probFinite[0] = true;
+            x1->m_probFinite[1] = true;
             x1->m_f = x1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
         }
 
@@ -1061,6 +1081,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
         x2->m_probProj[0] = probAngle123 / u23_LS2.z;
         x2->m_probProj[1] = probAngle321 / u21_LS2.z;
+        x2->m_probFinite[0] = true;
+        x2->m_probFinite[1] = true;
         x2->m_f = x1->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
     }
 
