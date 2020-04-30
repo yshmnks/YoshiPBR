@@ -530,9 +530,12 @@ struct PathVertex
     ysVec4 m_normalWS;
     ysVec4 m_tangentWS;
 
-    // 0: probability per projected solid angle of generating the direction to backtrack this path.
-    // 1: probability per projected solid angle of generating the direction to move forward on this path.
+    // 0: probability per projected solid angle of generating the direction to backtrack this subpath.
+    // 1: probability per projected solid angle of generating the direction to move forward on this subpath.
+    // ... If not finite, the corresponding probability per projected solid angle is Pi*delta(w-w0), and m_probProj[i] is expected to be the
+    //     coefficient Pi of the delta function.
     ys_float32 m_probProj[2];
+    ys_float32 m_probFinite[2];
 
     // conversion factor from per-projected-solid-angle to per-area probabilities. Corresponds to the m_probProj[1].
     // Note: The conversion factor for m_probProj[0] lives on the previous vertex.
@@ -541,6 +544,26 @@ struct PathVertex
     // BRDF for scattering at this point... or if this is the vertex on the light/sensor, the directional distribution of emitted radiance/
     // importance (directional distribution of radiance is the the radiance divided by the integral of radiance over projected solid angle)
     ysVec4 m_f;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct InputEyePathVertex
+{
+    void InitializePathVertex(PathVertex* pv) const
+    {
+        pv->m_shape = m_shape;
+        pv->m_material = m_material;
+        pv->m_posWS = m_posWS;
+        pv->m_normalWS = m_normalWS;
+        pv->m_tangentWS = m_tangentWS;
+    }
+
+    const ysShape* m_shape;
+    const ysMaterial* m_material;
+    ysVec4 m_posWS;
+    ysVec4 m_normalWS;
+    ysVec4 m_tangentWS;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -558,8 +581,8 @@ struct ysScene::SampleRadiance_Bi_Args
     // Ultimately, as the camera model is unknown to the method, the caller must generate the t=0,1 eye path vertices and probabilities.
     // Note: Even if the camera model is known, unless the camera is included as part of the scene collision the caller will still have to
     //       generate the t=0 eye path vertex. The t=1 vertex is no longer essential, however.
-    PathVertex eyePathVertex0;
-    PathVertex eyePathVertex1;
+    InputEyePathVertex eyePathVertex0;
+    InputEyePathVertex eyePathVertex1;
 
     // The "important exitance" (i.e. importance summed over all projected solid angles at our chosen point on the sensor) divided by the
     // probability per area of selecting our chosen point on the sensor.
@@ -645,6 +668,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             y[s].m_tangentWS = sp.m_tangent;
             y[s].m_probProj[0] = -1.0f;
             y[s].m_probProj[1] = -1.0f;
+            y[s].m_probFinite[0] = false;
+            y[s].m_probFinite[1] = false;
             y[s].m_projToArea1 = -1.0f;
             y[s].m_f = -ysVec4_one;
 
@@ -726,6 +751,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
                 break;
             }
             y1->m_probProj[1] = probProj12 * q;
+            y1->m_probFinite[1] = true;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
 
             y2->m_shape = m_shapes + srco.m_shapeId.m_index;
@@ -736,7 +762,10 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
             y2->m_probProj[0] = -1.0f;
             y2->m_probProj[1] = -1.0f;
+            y2->m_probFinite[0] = false;
+            y2->m_probFinite[1] = false;
             y2->m_projToArea1 = -1.0f;
+            y2->m_f = -ysVec4_one;
 
             s++;
         }
@@ -816,6 +845,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
 
             y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
             y1->m_probProj[1] = probProj012 * q;
+            y1->m_probFinite[0] = true;
+            y1->m_probFinite[1] = true;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
             y1->m_f = f012;
 
@@ -827,7 +858,10 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
             y2->m_probProj[0] = -1.0f;
             y2->m_probProj[1] = -1.0f;
+            y2->m_probFinite[0] = false;
+            y2->m_probFinite[1] = false;
             y2->m_projToArea1 = -1.0f;
+            y2->m_f = -ysVec4_one;
 
             s++;
         }
@@ -841,9 +875,30 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     //////////////////////////////
     // Generate the EYE subpath //
     //////////////////////////////
-    z[0] = args.eyePathVertex0;
-    z[1] = args.eyePathVertex1;
-    ysAssert(t == 2);
+    {
+        args.eyePathVertex0.InitializePathVertex(z + 0);
+        args.eyePathVertex1.InitializePathVertex(z + 1);
+        z[0].m_probProj[0] = -1.0f;
+        z[0].m_probProj[1] = ys_pi;
+        z[0].m_probFinite[0] = false;
+        z[0].m_probFinite[1] = false;
+        z[1].m_probProj[0] = -1.0f;
+        z[1].m_probProj[1] = -1.0f;
+        z[1].m_probFinite[0] = false;
+        z[1].m_probFinite[1] = false;
+        z[1].m_projToArea1 = -1.0f;
+        z[1].m_f = -ysVec4_one;
+
+        ysVec4 v10 = z[0].m_posWS - z[1].m_posWS;
+        ysVec4 u10 = ysNormalize3(v10);
+        ys_float32 d10Sqr = ysLengthSqr3(v10);
+        ys_float32 c = ysDot3(u10, z[1].m_normalWS);
+        ysAssert(c >= 0.0f && d10Sqr > divZeroThresh);
+        z[0].m_projToArea1 = c / d10Sqr;
+        z[0].m_f = args.WDirectionalOverPDirectional1;
+
+        ysAssert(t == 2);
+    }
     while (t < tMax)
     {
         const PathVertex* z0 = z + (t - 2);
@@ -929,6 +984,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         z2->m_probProj[0] = -1.0f;
         z2->m_probProj[1] = -1.0f;
         z2->m_projToArea1 = -1.0f;
+        z2->m_f = -ysVec4_one;
 
         t++;
     }
@@ -1002,11 +1058,11 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
         ysVec4 u23 = ysNormalize3(v23);
         ysVec4 u23_LS2 = ysMulT33(R2, u23);
-        ys_float32 probAngle123 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u23_LS2, u21_LS2);
-        ys_float32 probAngle321 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
-        x1->m_probProj[0] = probAngle123 / u23_LS2.z;
-        x1->m_probProj[1] = probAngle321 / u21_LS2.z;
-        x1->m_f = x1->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
+        ys_float32 probAngle123 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u23_LS2, u21_LS2);
+        ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
+        x2->m_probProj[0] = probAngle123 / u23_LS2.z;
+        x2->m_probProj[1] = probAngle321 / u21_LS2.z;
+        x2->m_f = x1->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
     }
 
     return ysVec4_zero;
