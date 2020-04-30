@@ -532,8 +532,7 @@ struct PathVertex
 
     // 0: probability per projected solid angle of generating the direction to backtrack this subpath.
     // 1: probability per projected solid angle of generating the direction to move forward on this subpath.
-    // ... If not finite, the corresponding probability per projected solid angle is Pi*delta(w-w0), and m_probProj[i] is expected to be the
-    //     coefficient Pi of the delta function.
+    // ... If not finite, the corresponding probability per projected solid angle is delta(w-w0), and m_probProj[i] is expected to 1.0
     ys_float32 m_probProj[2];
     ys_float32 m_probFinite[2];
 
@@ -635,6 +634,9 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     // eye   path must contain at least two vertices AND they must be pregenerated
     ysAssert(sMin >= 1 && tMax >= 2);
 
+    // Probability to generate the first non-virtual point on the Light(L). Don't forget to account for random light selection!
+    ys_float32 probArea_L1;
+
     ysVec4 LSpatialOverPSpatial0;
     ysVec4 WSpatialOverPSpatial0 = args.WSpatialOverPSpatial0;
 
@@ -652,8 +654,6 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ys_int32 emissiveShapeIdx = m_emissiveShapeIndices[emissiveShapeIdxIdx];
             const ysShape* emissiveShape = m_shapes + emissiveShapeIdx;
             ysSurfacePoint sp;
-            // Probability to generate the first non-virtual point on the Light(L). Don't forget to account for random light selection!
-            ys_float32 probArea_L1;
             emissiveShape->GenerateRandomSurfacePoint(this, &sp, &probArea_L1);
             probArea_L1 /= ys_float32(m_emissiveShapeCount); // Note this division!
 
@@ -879,7 +879,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         args.eyePathVertex0.InitializePathVertex(z + 0);
         args.eyePathVertex1.InitializePathVertex(z + 1);
         z[0].m_probProj[0] = -1.0f;
-        z[0].m_probProj[1] = ys_pi;
+        z[0].m_probProj[1] = 1.0f;
         z[0].m_probFinite[0] = false;
         z[0].m_probFinite[1] = false;
         z[1].m_probProj[0] = -1.0f;
@@ -1063,6 +1063,59 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         x2->m_probProj[0] = probAngle123 / u23_LS2.z;
         x2->m_probProj[1] = probAngle321 / u21_LS2.z;
         x2->m_f = x1->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
+    }
+
+    ////////////////////////////////////
+    // Compute (unweighted) estimator //
+    ////////////////////////////////////
+    ysVec4 estimator;
+    {
+        ysVec4 estimatorL = ysVec4_one;
+        if (s > 0)
+        {
+            estimatorL *= LSpatialOverPSpatial0;
+            for (ys_int32 i = 0; i < s - 1; ++i)
+            {
+                estimatorL *= y[i].m_f / ysSplat(y[i].m_probProj[1]);
+            }
+        }
+
+        ysVec4 estimatorE = ysVec4_one;
+        estimatorE *= WSpatialOverPSpatial0;
+        estimatorE *= args.WDirectionalOverPDirectional1;
+        for (ys_int32 i = 1; i < t - 1; ++i)
+        {
+            estimatorE *= z[i].m_f / ysSplat(z[i].m_probProj[1]);
+        }
+
+        ysVec4 estimatorJoin;
+        ysAssert(s > 0 || t > 0);
+        if (s == 0)
+        {
+            ysAssert(false);
+            estimatorJoin = ysVec4_zero; // TODO: Should be the emitted radiance
+        }
+        else if (t == 0)
+        {
+            ysAssert(false);
+            estimatorJoin = ysVec4_zero; // TODO: Shoudl be the emitted importance
+        }
+        else
+        {
+            ysAssert(s > 0 && t > 0);
+            ysAssert(y[s - 1].m_projToArea1 == z[t - 1].m_projToArea1);
+            ysVec4 g = ysSplat(y[s - 1].m_projToArea1);
+            estimatorJoin = y[s - 1].m_f * g * z[t - 1].m_f;
+        }
+        
+        estimator = estimatorL * estimatorJoin * estimatorE;
+    }
+
+    //////////////////////////////
+    // Compute estimator weight //
+    //////////////////////////////
+    ys_float32 weight;
+    {
     }
 
     return ysVec4_zero;
