@@ -646,6 +646,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     while (true) // This while loop is just a convenient trick to terminate the path due to things like Russian Roulette. We should never actually reenter.
     {
         ysAssert(s == 0); // No reentry
+        ysVec4 emittedIrradiance;
         {
             // Vertex 0: Pick a point on the light
 
@@ -658,7 +659,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             probArea_L1 /= ys_float32(m_emissiveShapeCount); // Note this division!
 
             const ysMaterial* emissiveMaterial = m_materials + emissiveShape->m_materialId.m_index;
-            ysVec4 emittedIrradiance = emissiveMaterial->EvaluateEmittedIrradiance(this);
+            emittedIrradiance = emissiveMaterial->EvaluateEmittedIrradiance(this);
             LSpatialOverPSpatial0 = emittedIrradiance / ysSplat(probArea_L1);
 
             y[s].m_material = m_materials + emissiveShape->m_materialId.m_index;
@@ -702,7 +703,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ys_float32 probProj12 = probAngle12 / u12_LS1.z;
 
             ysVec4 emittedRadiance = y1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
-            ysVec4 Ldirectional = emittedRadiance / LSpatialOverPSpatial0;
+            ysVec4 Ldirectional = emittedRadiance / emittedIrradiance;
 
             ys_float32 q = 1.0f; // Russian Roulette probability that we will attempt to produce y2.
             if (s >= sMin)
