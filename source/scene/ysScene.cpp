@@ -624,10 +624,10 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     ys_int32 s = 0;
     ys_int32 t = 2;
 
-    const ys_int32 sMin = args.minLightPathVertexCount - 1;
-    const ys_int32 sMax = args.maxLightPathVertexCount - 1;
-    const ys_int32 tMin = args.minEyePathVertexCount - 1;
-    const ys_int32 tMax = args.maxEyePathVertexCount - 1;
+    const ys_int32 sMin = args.minLightPathVertexCount;
+    const ys_int32 sMax = args.maxLightPathVertexCount;
+    const ys_int32 tMin = args.minEyePathVertexCount;
+    const ys_int32 tMax = args.maxEyePathVertexCount;
     ysAssert(sMin <= sMax && tMin <= tMax);
     ysAssert(sMax < sCeil && tMax < tCeil);
     // light path must contain at least one vertex

@@ -127,20 +127,30 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 
                 const char* renderModes[] = { "Global Illumination", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
-                ImGui::Combo("RenderMode", &selectedRenderMode, renderModes, 3);
+                ImGui::Combo("Render Mode", &selectedRenderMode, renderModes, 3);
                 switch (selectedRenderMode)
                 {
                     case 0:
                     {
                         s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
-                        ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
-                        switch (s_renderInput.m_giMethod)
+
+                        const char* giMethods[] = { "Uni-directional", "Bi-directional" };
+                        static int selectedGiMethod = 0;
+                        ImGui::Combo("GI Method", &selectedGiMethod, giMethods, 2);
+                        switch (selectedGiMethod)
                         {
-                            case ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional:
+                            case 0:
+                            {
+                                s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional;
+                                ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
                                 ImGui::Checkbox("Sample Light", &s_renderInput.m_sampleLight);
                                 break;
-                            case  ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
+                            }
+                            case 1:
+                            {
+                                s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional;
                                 break;
+                            }
                         }
                         break;
                     }
