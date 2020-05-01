@@ -1143,6 +1143,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         }
         
         estimator = estimatorL * estimatorJoin * estimatorE;
+        ysAssert(ysAllGE3(estimator, ysVec4_zero));
     }
 
     //////////////////////////////
@@ -1182,7 +1183,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ys_float32 pRatioE[tCeil] = { -1.0f };
         if (t > 1)
         {
-            pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
+            //pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
+            pRatioE[0] = 0.0f; // Because we only support pinhole cameras not modeled as part of the scene at the moment
             for (ys_int32 i = 1; i < t - 1; ++i)
             {
                 ys_float32 p01 = z[i - 1].m_probProj[1] * z[i - 1].m_projToArea1;
