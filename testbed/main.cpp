@@ -135,7 +135,7 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                         s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
 
                         const char* giMethods[] = { "Uni-directional", "Bi-directional" };
-                        static int selectedGiMethod = 0;
+                        static int selectedGiMethod = 1;
                         ImGui::Combo("GI Method", &selectedGiMethod, giMethods, 2);
                         switch (selectedGiMethod)
                         {

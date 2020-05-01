@@ -165,7 +165,7 @@ struct ysSceneRenderInput
         m_useRussianRouletteTermination = true;
 
         m_renderMode = RenderMode::e_regular;
-        m_giMethod = GlobalIlluminationMethod::e_uniDirectional;
+        m_giMethod = GlobalIlluminationMethod::e_biDirectional;
     }
 
     // For identity-eye-orientation, the eye looks down the -z axis (such that the x axis points right and y axis points up).

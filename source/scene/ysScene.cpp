@@ -699,7 +699,11 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ysVec4 u12_LS1;
             ys_float32 probAngle12;
             y1->m_material->GenerateRandomEmission(this, &u12_LS1, &probAngle12);
-            ysAssert(u12_LS1.z > 0.0f);
+            ysAssert(u12_LS1.z >= 0.0f);
+            if (u12_LS1.z < divZeroThresh)
+            {
+                break;
+            }
             ysVec4 u12 = ysMul33(R1, u12_LS1);
             ys_float32 probProj12 = probAngle12 / u12_LS1.z;
 
@@ -792,7 +796,11 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ysVec4 u12_LS1;
             ys_float32 probAngle012;
             y1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
-            ysAssert(u12_LS1.z > 0.0f);
+            ysAssert(u12_LS1.z >= 0.0f);
+            if (u12_LS1.z < divZeroThresh)
+            {
+                break;
+            }
             ysVec4 u12 = ysMul33(R1, u12_LS1);
             ys_float32 probProj012 = probAngle012 / u12_LS1.z;
             ysVec4 f012 = y1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
@@ -917,7 +925,11 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ysVec4 u12_LS1;
         ys_float32 probAngle012;
         z1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
-        ysAssert(u12_LS1.z > 0.0f);
+        ysAssert(u12_LS1.z >= 0.0f);
+        if (u12_LS1.z < divZeroThresh)
+        {
+            break;
+        }
         ysVec4 u12 = ysMul33(R1, u12_LS1);
         ys_float32 probProj012 = probAngle012 / u12_LS1.z;
         ysVec4 f210 = z1->m_material->EvaluateBRDF(this, u12_LS1, u10_LS1);
