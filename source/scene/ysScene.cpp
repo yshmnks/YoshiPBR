@@ -1288,14 +1288,10 @@ void ysScene::DoRenderWork(ysRender* target) const
                                     case ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional:
                                     {
                                         // To be precise, what we should actually accumulate here is...
-                                        //     radiance += (SampleRadiance / (dP/dw)) / wPerp_pixel
-                                        // ... where dP/dw is the per solid angle probability of sampling this point on the pixel
-                                        //           wPerp_pixel is the projected solid angle subtended by the pixel as seen by the eye.
-                                        // Now we introduce the specifics of our implementation:
-                                        //     1. We sample uniformly across the pixel's area.
-                                        //        ==> dp/dw = w_pixel
-                                        //     2. We model the cone of the eye that is sensitive to this pixel as oriented directly towards this pixel.
-                                        //        ==> wPerp_pixel = w_pixel
+                                        //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel
+                                        // ... where dP/dwproj is the probability per projected solid angle of sampling this point on the pixel
+                                        //           wproj_pixel is the projected solid angle subtended by the pixel as seen by the eye.
+                                        // Now for our specific implementation, we sample uniformly across the pixel's area such that dP/dwproj = wproj_pixel
                                         // (here we have assumed that the pixel subtends an infinitesimal solid angle)
                                         // Therefore, we merely need to accumulate radiance += SampleRadiance
                                         radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, input.m_sampleLight);
@@ -1303,6 +1299,29 @@ void ysScene::DoRenderWork(ysRender* target) const
                                     }
                                     case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
                                     {
+                                        SampleRadiance_Bi_Args args;
+                                        args.minLightPathVertexCount = 1;
+                                        args.maxLightPathVertexCount = 8;
+                                        args.minEyePathVertexCount = 2;
+                                        args.maxEyePathVertexCount = 8;
+
+                                        args.eyePathVertex0.m_shape = nullptr;
+                                        args.eyePathVertex0.m_material = nullptr;
+                                        args.eyePathVertex0.m_posWS = input.m_eye.p;
+                                        args.eyePathVertex0.m_normalWS = ysVec4_zero;
+                                        args.eyePathVertex0.m_tangentWS = ysVec4_zero;
+
+                                        args.eyePathVertex1.m_shape = shape;
+                                        args.eyePathVertex1.m_material = material;
+                                        args.eyePathVertex1.m_posWS = rco.m_hitPoint;
+                                        args.eyePathVertex1.m_normalWS = rco.m_hitNormal;
+                                        args.eyePathVertex1.m_tangentWS = rco.m_hitTangent;
+
+                                        args.WSpatialOverPSpatial0 = ysVec4_one;
+                                        args.WDirectionalOverPDirectional1 = ysVec4_one;
+
+                                        radiance += SampleRadiance_Bi(args);
+
                                         break;
                                     }
                                     default:
