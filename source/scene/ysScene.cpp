@@ -636,6 +636,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
 
     // Probability to generate the first non-virtual point on the Light(L). Don't forget to account for random light selection!
     ys_float32 probArea_L1;
+    ys_float32 probArea_W1 = -1.0f; // TODO
 
     ysVec4 LSpatialOverPSpatial0;
     ysVec4 WSpatialOverPSpatial0 = args.WSpatialOverPSpatial0;
@@ -1137,9 +1138,81 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     //////////////////////////////
     ys_float32 weight;
     {
+        ysAssert(s >= 0 && t >= 0 && s + t >= 2);
+
+        // pRatioL[i] = P[i-1] / P[i] ... where P[n] is the full path probability assuming y[n] is the last vertex on the light subpath.
+        ys_float32 pRatioL[sCeil] = { -1.0f };
+        if (s > 1)
+        {
+            pRatioL[0] = (y[1].m_probProj[0] * y[0].m_projToArea1) / probArea_L1;
+            for (ys_int32 i = 1; i < s - 1; ++i)
+            {
+                // The probability to generate y[i-1]->y[i] as part of the light subpath
+                ys_float32 p01 = y[i - 1].m_probProj[1] * y[i - 1].m_projToArea1;
+
+                // The probability to generate y[i+1]->y[i] as part of the eye subpath
+                ys_float32 p21 = y[i + 1].m_probProj[0] * y[i].m_projToArea1;
+
+                pRatioL[i] = p21 / p01;
+            }
+            ys_float32 p01 = y[s - 2].m_probProj[1] * y[s - 2].m_projToArea1;
+            ys_float32 p21 = (t > 0)
+                ? z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1
+                : probArea_W1;
+            pRatioL[s - 1] = p21 / p01;
+        }
+        else if (s == 1)
+        {
+            ysAssert(t > 0);
+            pRatioL[0] = (z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1) / probArea_L1;
+        }
+
+        ys_float32 pRatioE[tCeil] = { -1.0f };
+        if (t > 1)
+        {
+            pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
+            for (ys_int32 i = 1; i < t - 1; ++i)
+            {
+                ys_float32 p01 = z[i - 1].m_probProj[1] * z[i - 1].m_projToArea1;
+                ys_float32 p21 = z[i + 1].m_probProj[0] * z[i].m_projToArea1;
+                pRatioE[i] = p21 / p01;
+            }
+            ys_float32 p01 = z[t - 2].m_probProj[1] * z[t - 2].m_projToArea1;
+            ys_float32 p21 = (s > 0)
+                ? y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1
+                : probArea_L1;
+            pRatioE[t - 1] = p21 / p01;
+        }
+        else if (t == 1)
+        {
+            ysAssert(s > 0);
+            pRatioE[0] = (y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1) / probArea_W1;
+        }
+        
+        ys_float32 weightInv;
+        {
+            weightInv = 1.0f;
+
+            ys_float32 pRatio = 1.0f;
+            for (ys_int32 i = s - 1; i > -1; --i)
+            {
+                pRatio *= pRatioL[i];
+                weightInv += (pRatio * pRatio); // Balance heuristic with exponent 2
+            }
+
+            pRatio = 1.0f;
+            for (ys_int32 i = t - 1; i > -1; --i)
+            {
+                pRatio *= pRatioL[i];
+                weightInv += (pRatio * pRatio);
+            }
+        }
+
+        weight = 1.0f / weightInv;
     }
 
-    return ysVec4_zero;
+    ysVec4 weightedEstimator = ysSplat(weight) * estimator;
+    return weightedEstimator;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
