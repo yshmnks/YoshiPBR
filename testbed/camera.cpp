@@ -9,8 +9,8 @@ Camera::Camera()
     m_center = ysVecSet(0.0f, -16.0f, 0.0f);
     m_yaw = 0.0f;
     m_pitch = 0.0f;
-    m_verticalFov = ys_pi * 0.25f;
-    m_aspectRatio = 16.0f / 9.0f;
+    m_verticalFov = ys_pi * 0.125f;
+    m_aspectRatio = 1.0f;
     m_near = 0.25f;
     m_far = 128.0f;
 }

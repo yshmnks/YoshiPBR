@@ -522,6 +522,809 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct PathVertex
+{
+    const ysShape* m_shape;
+    const ysMaterial* m_material;
+    ysVec4 m_posWS;
+    ysVec4 m_normalWS;
+    ysVec4 m_tangentWS;
+
+    // 0: probability per projected solid angle of generating the direction to backtrack this subpath.
+    // 1: probability per projected solid angle of generating the direction to move forward on this subpath.
+    // ... If not finite, the corresponding probability per projected solid angle is delta(w-w0), and m_probProj[i] is expected to 1.0
+    ys_float32 m_probProj[2];
+    bool m_probFinite[2];
+
+    // conversion factor from per-projected-solid-angle to per-area probabilities. Corresponds to the m_probProj[1].
+    // Note: The conversion factor for m_probProj[0] lives on the previous vertex.
+    ys_float32 m_projToArea1;
+
+    // BRDF for scattering at this point... or if this is the vertex on the light/sensor, the directional distribution of emitted radiance/
+    // importance (directional distribution of radiance is the the radiance divided by the integral of radiance over projected solid angle)
+    ysVec4 m_f;
+    bool m_fFinite;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct InputEyePathVertex
+{
+    void InitializePathVertex(PathVertex* pv) const
+    {
+        pv->m_shape = m_shape;
+        pv->m_material = m_material;
+        pv->m_posWS = m_posWS;
+        pv->m_normalWS = m_normalWS;
+        pv->m_tangentWS = m_tangentWS;
+    }
+
+    const ysShape* m_shape;
+    const ysMaterial* m_material;
+    ysVec4 m_posWS;
+    ysVec4 m_normalWS;
+    ysVec4 m_tangentWS;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysScene::GenerateSubpathInput
+{
+    ys_int32 minLightPathVertexCount;
+    ys_int32 maxLightPathVertexCount;
+
+    // We haven't yet formalized the notion of importance emitter
+    // e.g. For a pinhole camera, each pixel's importance is W(x, w) = DiracDelta(x - x_pinhole) * W'(w) where W' is only nonzero over the
+    //      solid angle subtended by the pixel.
+    // Therefore, the bidirectional method cannot directly evaluate the integral over importance; that responsibility currently falls on the
+    // caller of the method. More concretely, if the light path intersects the camera, we have no way to determine which pixel was hit.
+    // Ultimately, as the camera model is unknown to the method, the caller must generate the t=0,1 eye path vertices and probabilities.
+    // Note: Even if the camera model is known, unless the camera is included as part of the scene collision the caller will still have to
+    //       generate the t=0 eye path vertex. The t=1 vertex is no longer essential, however.
+    InputEyePathVertex eyePathVertex0;
+    InputEyePathVertex eyePathVertex1;
+
+    // The "important exitance" (i.e. importance summed over all projected solid angles at our chosen point on the sensor) divided by the
+    // probability per area of selecting our chosen point on the sensor.
+    ysVec4 WSpatialOverPSpatial0;
+    // WDirectional: Directional distribution of importance from the point on the sensor (vertex 0) to the first point in the scene (vertex 1).
+    // PDirectional: The probability per projected solid angle (relative to the sensor) for generating vertex 1 given vertex 0.
+    ysVec4 WDirectionalOverPDirectional01;
+
+    // Remarks:
+    // - For a finite sensor, the two parameters above can each be broken down into numerator and denominator. However, we consume the
+    //   precomputed ratio because for some camera models, while the ratio is well-defined, individually the numerator and denominator can
+    //   be unbounded (delta functions).
+    // - Let's consider the most common pinhole camera, which measures radiance in each pixel. The directional distribution of importance
+    //   (i.e importance divided by the important exitance) in this case is the inverse pixel projected solid angle; hence, the numerator is
+    //   just the unit-scaled delta function. The denominator, being a probability density, is also a unit-scaled delta function. So...
+    //       WSpatialOverPSpatial0 = 1
+    //   Computing WDirectionalOverPDirectional1 is a bit more nuanced; each pixel spans a finite range of directions and so unlike for the
+    //   inifinitesimal pinhole, there are various ways to generate vertex1. It is still useful to consider a specific example, however.
+    //   Suppose vertex1 is generated by treating the pixel as a finite rect some distance from the pinhole and randomly sampling points on
+    //   this rect. If the dimensions of the pixel rect are small relative the distance from pinhole (usually a reasonable assumption), then
+    //   the projected solid angle measure is constant across the pixel and PDirectional=1/wProj_pixel. As aforementtioned,
+    //   WDirectional=1/wProj_pixel. So...
+    //      WDirectionalOverPDirectional1 = 1
+
+    ys_int32 minEyePathVertexCount;
+    ys_int32 maxEyePathVertexCount;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysScene::GenerateSubpathOutput
+{
+    static const ys_int32 s_nLCeil = 16;
+    static const ys_int32 s_nECeil = 16;
+    PathVertex m_y[s_nLCeil]; // light-path vertices
+    PathVertex m_z[s_nECeil]; //   eye-path vertices
+    ys_int32 m_nL;
+    ys_int32 m_nE;
+    ys_float32 m_dPdA_L0;
+    ys_float32 m_dPdA_W0;
+    ysVec4 m_estimatorFactor_L0; // The emitted irradiance divided by the per-area-probability of generating vertex 0 of the light subpath
+    ysVec4 m_estimatorFactor_W0; // ........... importance .................................................................  eye  .......
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubpathInput& input) const
+{
+    const ys_float32 rayCastNudge = 0.001f; // Hack. Push ray cast origins out a little to avoid collision with the source shape.
+    const ys_float32 divZeroThresh = ys_epsilon; // Prevent unsafe division.
+
+    PathVertex* y = output->m_y;
+    PathVertex* z = output->m_z;
+
+    const ys_int32 nLMin = input.minLightPathVertexCount;
+    const ys_int32 nLMax = input.maxLightPathVertexCount;
+    const ys_int32 nEMin = input.minEyePathVertexCount;
+    const ys_int32 nEMax = input.maxEyePathVertexCount;
+    ysAssert(nLMin <= nLMax && nEMin <= nEMax);
+    ysAssert(nLMax <= GenerateSubpathOutput::s_nLCeil && nEMax <= GenerateSubpathOutput::s_nECeil);
+    // Eye path must contain at least two vertices AND they must be pregenerated
+    ysAssert(nLMin >= 0 && nEMin >= 2);
+
+    ys_int32 nL;
+    ys_int32 nE;
+
+    // Probability to generate the first point on the Light. Don't forget to account for random light selection!
+    ys_float32 probArea_L0;
+    ys_float32 probArea_W0 = -1.0f; // TODO
+
+    ysVec4 LSpatialOverPSpatial0;
+    ysVec4 WSpatialOverPSpatial0 = input.WSpatialOverPSpatial0;
+
+    ////////////////////////////////
+    // Generate the LIGHT subpath //
+    ////////////////////////////////
+    nL = 0;
+    while (true) // This while loop is just a convenient trick to terminate the path due to things like Russian Roulette. We should never actually reenter.
+    {
+        ysAssert(nL == 0); // No reentry
+        if (nL >= nLMax)
+        {
+            break;
+        }
+
+        ysVec4 emittedIrradiance;
+        {
+            // Vertex 0: Pick a point on the light
+
+            // TODO: Sample according to wattage
+            ys_int32 emissiveShapeIdxIdx = rand() % m_emissiveShapeCount;
+            ys_int32 emissiveShapeIdx = m_emissiveShapeIndices[emissiveShapeIdxIdx];
+            const ysShape* emissiveShape = m_shapes + emissiveShapeIdx;
+            ysSurfacePoint sp;
+            emissiveShape->GenerateRandomSurfacePoint(this, &sp, &probArea_L0);
+            probArea_L0 /= ys_float32(m_emissiveShapeCount); // Note this division!
+
+            const ysMaterial* emissiveMaterial = m_materials + emissiveShape->m_materialId.m_index;
+            emittedIrradiance = emissiveMaterial->EvaluateEmittedIrradiance(this);
+            LSpatialOverPSpatial0 = emittedIrradiance / ysSplat(probArea_L0);
+
+            y[nL].m_material = m_materials + emissiveShape->m_materialId.m_index;
+            y[nL].m_shape = emissiveShape;
+            y[nL].m_posWS = sp.m_point;
+            y[nL].m_normalWS = sp.m_normal;
+            y[nL].m_tangentWS = sp.m_tangent;
+            y[nL].m_probProj[0] = -1.0f;
+            y[nL].m_probProj[1] = -1.0f;
+            y[nL].m_probFinite[0] = false;
+            y[nL].m_probFinite[1] = false;
+            y[nL].m_projToArea1 = -1.0f;
+            y[nL].m_f = -ysVec4_one;
+            y[nL].m_fFinite = false;
+
+            nL++;
+        }
+
+        if (nL >= nLMax)
+        {
+            break;
+        }
+
+        {
+            // Vertex 1: This is a bit different from Vertices 2...s. Namely, the usual BSDF term is the directional distribution of the emitted radiance.
+
+            PathVertex* y1 = y + (nL - 1);
+            PathVertex* y2 = y + (nL - 0);
+
+            ysMtx44 R1; // The frame at vertex 1
+            {
+                R1.cx = y1->m_tangentWS;
+                R1.cy = ysCross(y1->m_normalWS, y1->m_tangentWS);
+                R1.cz = y1->m_normalWS;
+            }
+
+            ysVec4 u12_LS1;
+            ys_float32 probAngle12;
+            y1->m_material->GenerateRandomEmission(this, &u12_LS1, &probAngle12);
+            ysAssert(u12_LS1.z >= 0.0f);
+            if (u12_LS1.z < divZeroThresh)
+            {
+                break;
+            }
+            ysVec4 u12 = ysMul33(R1, u12_LS1);
+            ys_float32 probProj12 = probAngle12 / u12_LS1.z;
+
+            ysVec4 emittedRadiance = y1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
+            ysVec4 Ldirectional = emittedRadiance / emittedIrradiance;
+
+            ys_float32 q = 1.0f; // Russian Roulette probability that we will attempt to produce y2.
+            if (nL >= nLMin)
+            {
+                // We've already generated the minimum number of vertices requested. Do Russian Roulette termination.
+                ys_float32 f = ysMax(ysMax(Ldirectional.x, Ldirectional.y), Ldirectional.z);
+                ys_float32 q = ysMin(1.0f, f / probProj12);
+                ys_float32 r = ysRandom(0.0f, 1.0f);
+                bool absorbed = (r > q);
+                if (absorbed)
+                {
+                    break;
+                }
+            }
+
+            y1->m_f = Ldirectional;
+            y1->m_fFinite = true;
+
+            ysSceneRayCastInput srci;
+            srci.m_maxLambda = ys_maxFloat;
+            srci.m_direction = u12;
+            srci.m_origin = y1->m_posWS + u12 * ysSplat(rayCastNudge);
+
+            ysSceneRayCastOutput srco;
+            bool hit = RayCastClosest(&srco, srci);
+            if (hit == false)
+            {
+                break;
+            }
+            ysMtx44 R2; // The frame at vertex 2
+            {
+                R2.cx = srco.m_hitTangent;
+                R2.cy = ysCross(srco.m_hitNormal, srco.m_hitTangent);
+                R2.cz = srco.m_hitNormal;
+            }
+            ysVec4 u21_LS2 = ysMulT33(R2, -u12);
+            ysAssert(u21_LS2.z > 0.0f);
+            if (u21_LS2.z < divZeroThresh)
+            {
+                break;
+            }
+            ysAssert(srco.m_lambda > 0.0f);
+            ys_float32 d12 = srco.m_lambda + rayCastNudge;
+            ys_float32 d12Sqr = d12 * d12;
+            if (d12Sqr < divZeroThresh)
+            {
+                break;
+            }
+            y1->m_probProj[1] = probProj12 * q;
+            y1->m_probFinite[1] = true;
+            y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
+
+            y2->m_shape = m_shapes + srco.m_shapeId.m_index;
+            y2->m_material = m_materials + y2->m_shape->m_materialId.m_index;
+            y2->m_posWS = srco.m_hitPoint;
+            y2->m_normalWS = srco.m_hitNormal;
+            y2->m_tangentWS = srco.m_hitTangent;
+            // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
+            y2->m_probProj[0] = -1.0f;
+            y2->m_probProj[1] = -1.0f;
+            y2->m_probFinite[0] = false;
+            y2->m_probFinite[1] = false;
+            y2->m_projToArea1 = -1.0f;
+            y2->m_f = -ysVec4_one;
+            y2->m_fFinite = false;
+
+            nL++;
+        }
+
+        while (nL < nLMax)
+        {
+            const PathVertex* y0 = y + (nL - 2);
+            PathVertex* y1 = y + (nL - 1);
+            PathVertex* y2 = y + (nL - 0); // This is the potential new vertex
+
+            ysMtx44 R1; // The frame at vertex 1
+            {
+                R1.cx = y1->m_tangentWS;
+                R1.cy = ysCross(y1->m_normalWS, y1->m_tangentWS);
+                R1.cz = y1->m_normalWS;
+            }
+            ysVec4 v10 = y0->m_posWS - y1->m_posWS;
+            ysVec4 v10_LS1 = ysMulT33(R1, v10);
+            ysVec4 u10_LS1 = ysNormalize3(v10_LS1);
+            ysAssert(u10_LS1.z > divZeroThresh * 0.999f); // This should have been checked when generating the previous vertex
+
+            ysVec4 u12_LS1;
+            ys_float32 probAngle012;
+            y1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
+            ysAssert(u12_LS1.z >= 0.0f);
+            if (u12_LS1.z < divZeroThresh)
+            {
+                break;
+            }
+            ysVec4 u12 = ysMul33(R1, u12_LS1);
+            ys_float32 probProj012 = probAngle012 / u12_LS1.z;
+            ysVec4 f012 = y1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
+
+            ys_float32 q = 1.0f; // Russian Roulette probability that we will attempt to produce y2.
+            if (nL >= nLMin)
+            {
+                // We've already generated the minimum number of vertices requested. Do Russian Roulette termination.
+                ys_float32 f = ysMax(ysMax(f012.x, f012.y), f012.z);
+                ys_float32 q = ysMin(1.0f, f / probProj012);
+                ys_float32 r = ysRandom(0.0f, 1.0f);
+                bool absorbed = (r > q);
+                if (absorbed)
+                {
+                    break;
+                }
+            }
+
+            ysSceneRayCastInput srci;
+            srci.m_maxLambda = ys_maxFloat;
+            srci.m_direction = u12;
+            srci.m_origin = y1->m_posWS + u12 * ysSplat(rayCastNudge);
+
+            ysSceneRayCastOutput srco;
+            bool hit = RayCastClosest(&srco, srci);
+            if (hit == false)
+            {
+                break;
+            }
+
+            ysMtx44 R2; // The frame at vertex 2
+            {
+                R2.cx = srco.m_hitTangent;
+                R2.cy = ysCross(srco.m_hitNormal, srco.m_hitTangent);
+                R2.cz = srco.m_hitNormal;
+            }
+            ysVec4 u21_LS2 = ysMulT33(R2, -u12);
+            ysAssert(u21_LS2.z > 0.0f);
+            if (u21_LS2.z < divZeroThresh)
+            {
+                break;
+            }
+
+            ysAssert(srco.m_lambda > 0.0f);
+            ys_float32 d12 = srco.m_lambda + rayCastNudge;
+            ys_float32 d12Sqr = d12 * d12;
+            if (d12Sqr < divZeroThresh)
+            {
+                break;
+            }
+
+            y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
+            y1->m_probProj[1] = probProj012 * q;
+            y1->m_probFinite[0] = true;
+            y1->m_probFinite[1] = true;
+            y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
+            y1->m_f = f012;
+            y1->m_fFinite = true;
+
+            y2->m_shape = m_shapes + srco.m_shapeId.m_index;
+            y2->m_material = m_materials + y2->m_shape->m_materialId.m_index;
+            y2->m_posWS = srco.m_hitPoint;
+            y2->m_normalWS = srco.m_hitNormal;
+            y2->m_tangentWS = srco.m_hitTangent;
+            // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
+            y2->m_probProj[0] = -1.0f;
+            y2->m_probProj[1] = -1.0f;
+            y2->m_probFinite[0] = false;
+            y2->m_probFinite[1] = false;
+            y2->m_projToArea1 = -1.0f;
+            y2->m_f = -ysVec4_one;
+            y2->m_fFinite = false;
+
+            nL++;
+        }
+
+        break;
+    }
+
+    //////////////////////////////
+    // Generate the EYE subpath //
+    //////////////////////////////
+    {
+        input.eyePathVertex0.InitializePathVertex(z + 0);
+        input.eyePathVertex1.InitializePathVertex(z + 1);
+        z[0].m_probProj[0] = -1.0f;
+        z[0].m_probProj[1] = 1.0f;
+        z[0].m_probFinite[0] = false;
+        z[0].m_probFinite[1] = false;
+        z[1].m_probProj[0] = -1.0f;
+        z[1].m_probProj[1] = -1.0f;
+        z[1].m_probFinite[0] = false;
+        z[1].m_probFinite[1] = false;
+        z[1].m_projToArea1 = -1.0f;
+        z[1].m_f = -ysVec4_one;
+
+        ysVec4 v10 = z[0].m_posWS - z[1].m_posWS;
+        ysVec4 u10 = ysNormalize3(v10);
+        ys_float32 d10Sqr = ysLengthSqr3(v10);
+        ys_float32 c = ysDot3(u10, z[1].m_normalWS);
+        ysAssert(c >= 0.0f && d10Sqr > divZeroThresh);
+        z[0].m_projToArea1 = c / d10Sqr;
+        z[0].m_f = input.WDirectionalOverPDirectional01;
+        z[0].m_fFinite = false;
+    }
+    nE = 2;
+    while (nE < nEMax)
+    {
+        const PathVertex* z0 = z + (nE - 2);
+        PathVertex* z1 = z + (nE - 1);
+        PathVertex* z2 = z + (nE - 0);
+
+        ysMtx44 R1;
+        {
+            R1.cx = z1->m_tangentWS;
+            R1.cy = ysCross(z1->m_normalWS, z1->m_tangentWS);
+            R1.cz = z1->m_normalWS;
+        }
+        ysVec4 v10 = z0->m_posWS - z1->m_posWS;
+        ysVec4 v10_LS1 = ysMulT33(R1, v10);
+        ysVec4 u10_LS1 = ysNormalize3(v10_LS1);
+        ysAssert(u10_LS1.z > divZeroThresh * 0.999f);
+
+        ysVec4 u12_LS1;
+        ys_float32 probAngle012;
+        z1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
+        ysAssert(u12_LS1.z >= 0.0f);
+        if (u12_LS1.z < divZeroThresh)
+        {
+            break;
+        }
+        ysVec4 u12 = ysMul33(R1, u12_LS1);
+        ys_float32 probProj012 = probAngle012 / u12_LS1.z;
+        ysVec4 f210 = z1->m_material->EvaluateBRDF(this, u12_LS1, u10_LS1);
+
+        ys_float32 q = 1.0f;
+        if (nE >= nEMin)
+        {
+            ys_float32 f = ysMax(ysMax(f210.x, f210.y), f210.z);
+            ys_float32 q = ysMin(1.0f, f / probProj012);
+            ys_float32 r = ysRandom(0.0f, 1.0f);
+            bool absorbed = (r > q);
+            if (absorbed)
+            {
+                break;
+            }
+        }
+
+        ysSceneRayCastInput srci;
+        srci.m_maxLambda = ys_maxFloat;
+        srci.m_direction = u12;
+        srci.m_origin = z1->m_posWS + u12 * ysSplat(rayCastNudge);
+
+        ysSceneRayCastOutput srco;
+        bool hit = RayCastClosest(&srco, srci);
+        if (hit == false)
+        {
+            break;
+        }
+
+        ysMtx44 R2; // The frame at vertex 2
+        {
+            R2.cx = srco.m_hitTangent;
+            R2.cy = ysCross(srco.m_hitNormal, srco.m_hitTangent);
+            R2.cz = srco.m_hitNormal;
+        }
+        ysVec4 u21_LS2 = ysMulT33(R2, -u12);
+        ysAssert(u21_LS2.z > 0.0f);
+        if (u21_LS2.z < divZeroThresh)
+        {
+            break;
+        }
+
+        ysAssert(srco.m_lambda > 0.0f);
+        ys_float32 d12 = srco.m_lambda + rayCastNudge;
+        ys_float32 d12Sqr = d12 * d12;
+        if (d12Sqr < divZeroThresh)
+        {
+            break;
+        }
+
+        z1->m_probProj[0] = z1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
+        z1->m_probProj[1] = probProj012 * q;
+        z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
+        z1->m_f = f210;
+        z1->m_fFinite = true;
+
+        z2->m_shape = m_shapes + srco.m_shapeId.m_index;
+        z2->m_material = m_materials + z2->m_shape->m_materialId.m_index;
+        z2->m_posWS = srco.m_hitPoint;
+        z2->m_normalWS = srco.m_hitNormal;
+        z2->m_tangentWS = srco.m_hitTangent;
+        // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
+        z2->m_probProj[0] = -1.0f;
+        z2->m_probProj[1] = -1.0f;
+        z2->m_probFinite[0] = false;
+        z2->m_probFinite[1] = false;
+        z2->m_projToArea1 = -1.0f;
+        z2->m_f = -ysVec4_one;
+        z2->m_fFinite = false;
+
+        nE++;
+    }
+
+    output->m_nL = nL;
+    output->m_nE = nE;
+    output->m_dPdA_L0 = probArea_L0;
+    output->m_dPdA_W0 = probArea_W0;
+    output->m_estimatorFactor_L0 = LSpatialOverPSpatial0;
+    output->m_estimatorFactor_W0 = WSpatialOverPSpatial0;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths, ys_int32 s, ys_int32 t) const
+{
+    const ys_float32 rayCastNudge = 0.001f; // Hack. Push ray cast origins out a little to avoid collision with the source shape.
+    const ys_float32 divZeroThresh = ys_epsilon; // Prevent unsafe division.
+
+    ysAssert(0 <= s && s <= subpaths.m_nL);
+    ysAssert(2 <= t && t <= subpaths.m_nE);
+    PathVertex yz[GenerateSubpathOutput::s_nLCeil + GenerateSubpathOutput::s_nECeil];
+    PathVertex* y = yz + 0;
+    PathVertex* z = yz + s;
+    ysMemCpy(y, subpaths.m_y, sizeof(PathVertex) * s);
+    ysMemCpy(z, subpaths.m_z, sizeof(PathVertex) * t);
+
+    const ysVec4& LSpatialOverPSpatial0 = subpaths.m_estimatorFactor_L0;
+    const ysVec4& WSpatialOverPSpatial0 = subpaths.m_estimatorFactor_W0;
+    const ys_float32& probArea_L0 = subpaths.m_dPdA_L0;
+    const ys_float32& probArea_W0 = subpaths.m_dPdA_W0;
+
+    /////////////////////////////////
+    // Join light and eye subpaths //
+    /////////////////////////////////
+    ysAssert(s >= 0 && t >= 2);
+    if (s > 0 && t > 0)
+    {
+        PathVertex* x1 = y + (s - 1); // The last vertex on the light path
+        PathVertex* x2 = z + (t - 1); // The last vertex on the  eye  path
+        ysVec4 v12 = x2->m_posWS - x1->m_posWS;
+        ys_float32 d12Sqr = ysLengthSqr3(v12);
+        if (d12Sqr < divZeroThresh)
+        {
+            // What about the other connections?
+            return ysVec4_zero;
+        }
+
+        ysMtx44 R1;
+        {
+            R1.cx = x1->m_tangentWS;
+            R1.cy = ysCross(x1->m_normalWS, x1->m_tangentWS);
+            R1.cz = x1->m_normalWS;
+        }
+
+        ysMtx44 R2;
+        {
+            R2.cx = x2->m_tangentWS;
+            R2.cy = ysCross(x2->m_normalWS, x2->m_tangentWS);
+            R2.cz = x2->m_normalWS;
+        }
+
+        ysVec4 u12 = ysNormalize3(v12);
+        ysVec4 u12_LS1 = ysMulT33(R1, u12);
+        ysVec4 u21_LS2 = ysMulT33(R2, -u12);
+        if (u12_LS1.z < divZeroThresh || u21_LS2.z < divZeroThresh)
+        {
+            // What about the other connections?
+            return ysVec4_zero;
+        }
+
+        ys_float32 d12 = ysLength3(v12);
+
+        ysSceneRayCastInput srci;
+        srci.m_origin = x1->m_posWS + u12 * ysSplat(rayCastNudge);
+        srci.m_direction = v12;
+        srci.m_maxLambda = (d12 - rayCastNudge) / d12;
+
+        ysSceneRayCastOutput srco;
+        bool hit = RayCastClosest(&srco, srci);
+        if (hit)
+        {
+            ysShape* hitShape = m_shapes + srco.m_shapeId.m_index;
+            bool occluded = (hitShape != x2->m_shape);
+            if (occluded)
+            {
+                return ysVec4_zero;
+            }
+        }
+
+        ys_float32 g = u12_LS1.z * u21_LS2.z / d12Sqr;
+        x1->m_projToArea1 = g;
+        x2->m_projToArea1 = g;
+
+        if (s == 1)
+        {
+            ysAssert(x1->m_material->IsEmissive(this));
+            ysVec4 LSpatial = x1->m_material->EvaluateEmittedIrradiance(this);
+            ysVec4 L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
+            ys_float32 probAngle12 = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
+            x1->m_probProj[1] = probAngle12 / u12_LS1.z;
+            x1->m_probFinite[1] = true;
+            x1->m_f = L / LSpatial;
+            x1->m_fFinite = true;
+        }
+        else
+        {
+            ysAssert(s > 1);
+            PathVertex* x0 = y + (s - 2);
+            ysVec4 v10 = x0->m_posWS - x1->m_posWS;
+            ysVec4 u10 = ysNormalize3(v10);
+            ysVec4 u10_LS1 = ysMulT33(R1, u10);
+            ys_float32 probAngle012 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u12_LS1, u10_LS1);
+            ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1);
+            x1->m_probProj[0] = probAngle210 / u10_LS1.z;
+            x1->m_probProj[1] = probAngle012 / u12_LS1.z;
+            x1->m_probFinite[0] = true;
+            x1->m_probFinite[1] = true;
+            x1->m_f = x1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
+            x1->m_fFinite = true;
+        }
+
+        PathVertex* x3 = z + (t - 2);
+        ysVec4 v23 = x3->m_posWS - x2->m_posWS;
+        ysVec4 u23 = ysNormalize3(v23);
+        ysVec4 u23_LS2 = ysMulT33(R2, u23);
+        ys_float32 probAngle123 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u23_LS2, u21_LS2);
+        ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
+        x2->m_probProj[0] = probAngle123 / u23_LS2.z;
+        x2->m_probProj[1] = probAngle321 / u21_LS2.z;
+        x2->m_probFinite[0] = true;
+        x2->m_probFinite[1] = true;
+        x2->m_f = x2->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
+        x2->m_fFinite = true;
+    }
+
+    ////////////////////////////////////
+    // Compute (unweighted) estimator //
+    ////////////////////////////////////
+    ysVec4 estimator;
+    {
+        ysVec4 estimatorL = ysVec4_one;
+        if (s > 0)
+        {
+            estimatorL *= LSpatialOverPSpatial0;
+            for (ys_int32 i = 0; i < s - 1; ++i)
+            {
+                estimatorL *= y[i].m_f / ysSplat(y[i].m_probProj[1]);
+            }
+        }
+
+        ysVec4 estimatorE = ysVec4_one;
+        if (t > 0)
+        {
+            estimatorE *= WSpatialOverPSpatial0;
+            for (ys_int32 i = 0; i < t - 1; ++i)
+            {
+                estimatorE *= z[i].m_f / ysSplat(z[i].m_probProj[1]);
+            }
+        }
+
+        ysVec4 estimatorJoin;
+        ysAssert(s > 0 || t > 0);
+        if (s == 0)
+        {
+            ysAssert(t >= 2);
+            const PathVertex& z1 = z[t - 1];
+            const PathVertex& z0 = z[t - 2];
+            ysMtx44 R1;
+            {
+                R1.cx = z1.m_tangentWS;
+                R1.cy = ysCross(z1.m_normalWS, z1.m_tangentWS);
+                R1.cz = z1.m_normalWS;
+            }
+            ysVec4 v10 = z0.m_posWS - z1.m_posWS;
+            ysVec4 u10 = ysNormalize3(v10);
+            ysVec4 u10_LS1 = ysMulT33(R1, u10);
+            estimatorJoin = z1.m_material->EvaluateEmittedRadiance(this, u10_LS1, ysVec4_unitZ, ysVec4_unitX);
+        }
+        else if (t == 0)
+        {
+            ysAssert(false);
+            estimatorJoin = ysVec4_zero; // TODO: Should be the emitted importance
+        }
+        else
+        {
+            ysAssert(s > 0 && t > 0);
+            ysAssert(y[s - 1].m_projToArea1 == z[t - 1].m_projToArea1);
+            ysVec4 g = ysSplat(y[s - 1].m_projToArea1);
+            estimatorJoin = y[s - 1].m_f * g * z[t - 1].m_f;
+        }
+
+        estimator = estimatorL * estimatorJoin * estimatorE;
+        ysAssert(ysAllGE3(estimator, ysVec4_zero));
+    }
+
+    //////////////////////////////
+    // Compute estimator weight //
+    //////////////////////////////
+    ys_float32 weight;
+    {
+        ysAssert(s >= 0 && t >= 0 && s + t >= 2);
+
+        // pRatioL[i] = P[i-1] / P[i] ... where P[n] is the full path probability assuming y[n] is the last vertex on the light subpath.
+        ys_float32 pRatioL[GenerateSubpathOutput::s_nLCeil] = { -1.0f };
+        if (s > 1)
+        {
+            pRatioL[0] = (y[1].m_probProj[0] * y[0].m_projToArea1) / probArea_L0;
+            for (ys_int32 i = 1; i < s - 1; ++i)
+            {
+                // The probability to generate y[i-1]->y[i] as part of the light subpath
+                ys_float32 p01 = y[i - 1].m_probProj[1] * y[i - 1].m_projToArea1;
+
+                // The probability to generate y[i+1]->y[i] as part of the eye subpath
+                ys_float32 p21 = y[i + 1].m_probProj[0] * y[i].m_projToArea1;
+
+                pRatioL[i] = p21 / p01;
+            }
+            ys_float32 p01 = y[s - 2].m_probProj[1] * y[s - 2].m_projToArea1;
+            ys_float32 p21 = (t > 0)
+                ? z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1
+                : probArea_W0;
+            pRatioL[s - 1] = p21 / p01;
+        }
+        else if (s == 1)
+        {
+            ysAssert(t > 0);
+            pRatioL[0] = (z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1) / probArea_L0;
+        }
+
+        ys_float32 pRatioE[GenerateSubpathOutput::s_nECeil] = { -1.0f };
+        if (t > 1)
+        {
+            //pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
+            pRatioE[0] = 0.0f; // Because we only support pinhole cameras not modeled as part of the scene at the moment
+            for (ys_int32 i = 1; i < t - 1; ++i)
+            {
+                ys_float32 p01 = z[i - 1].m_probProj[1] * z[i - 1].m_projToArea1;
+                ys_float32 p21 = z[i + 1].m_probProj[0] * z[i].m_projToArea1;
+                pRatioE[i] = p21 / p01;
+            }
+            ys_float32 p01 = z[t - 2].m_probProj[1] * z[t - 2].m_projToArea1;
+            ys_float32 p21 = (s > 0)
+                ? y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1
+                : probArea_L0;
+            pRatioE[t - 1] = p21 / p01;
+        }
+        else if (t == 1)
+        {
+            ysAssert(s > 0);
+            pRatioE[0] = (y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1) / probArea_W0;
+        }
+
+        ys_float32 weightInv;
+        {
+            weightInv = 1.0f;
+
+            ys_float32 pRatio = 1.0f;
+            for (ys_int32 i = s - 1; i > -1; --i)
+            {
+                pRatio *= pRatioL[i];
+                weightInv += (pRatio * pRatio); // Balance heuristic with exponent 2
+            }
+
+            pRatio = 1.0f;
+            for (ys_int32 i = t - 1; i > -1; --i)
+            {
+                pRatio *= pRatioL[i];
+                weightInv += (pRatio * pRatio);
+            }
+        }
+
+        weight = 1.0f / weightInv;
+    }
+
+    ysVec4 weightedEstimator = ysSplat(weight) * estimator;
+    return weightedEstimator;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::SampleRadiance_Bi(const GenerateSubpathInput& input) const
+{
+    GenerateSubpathOutput subpaths;
+    GenerateSubpaths(&subpaths, input);
+
+    ysVec4 radiance = ysVec4_zero;
+    for (ys_int32 s = 0; s < subpaths.m_nL; ++s)
+    {
+        for (ys_int32 t = 2; t < subpaths.m_nE; ++t)
+        {
+            radiance += EvaluateTruncatedSubpaths(subpaths, s, t);
+        }
+    }
+
+    return radiance;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysScene::DoRenderWork(ysRender* target) const
 {
     const ysSceneRenderInput& input = target->m_input;
@@ -588,7 +1391,53 @@ void ysScene::DoRenderWork(ysRender* target) const
                                 surfaceData.m_tangentWS = rco.m_hitTangent;
                                 surfaceData.m_incomingDirectionWS = -pixelDirWS;
 
-                                radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, input.m_sampleLight);
+                                switch (input.m_giMethod)
+                                {
+                                    case ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional:
+                                    {
+                                        // To be precise, what we should actually accumulate here is...
+                                        //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel
+                                        // ... where dP/dwproj is the probability per projected solid angle of sampling this point on the pixel
+                                        //           wproj_pixel is the projected solid angle subtended by the pixel as seen by the eye.
+                                        // Now for our specific implementation, we sample uniformly across the pixel's area such that dP/dwproj = wproj_pixel
+                                        // (here we have assumed that the pixel subtends an infinitesimal solid angle)
+                                        // Therefore, we merely need to accumulate radiance += SampleRadiance
+                                        radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, input.m_sampleLight);
+                                        break;
+                                    }
+                                    case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
+                                    {
+                                        GenerateSubpathInput args;
+                                        args.minLightPathVertexCount = 1;
+                                        args.maxLightPathVertexCount = 8;
+                                        args.minEyePathVertexCount = 2;
+                                        args.maxEyePathVertexCount = 8;
+
+                                        args.eyePathVertex0.m_shape = nullptr;
+                                        args.eyePathVertex0.m_material = nullptr;
+                                        args.eyePathVertex0.m_posWS = input.m_eye.p;
+                                        args.eyePathVertex0.m_normalWS = ysVec4_zero;
+                                        args.eyePathVertex0.m_tangentWS = ysVec4_zero;
+
+                                        args.eyePathVertex1.m_shape = shape;
+                                        args.eyePathVertex1.m_material = material;
+                                        args.eyePathVertex1.m_posWS = rco.m_hitPoint;
+                                        args.eyePathVertex1.m_normalWS = rco.m_hitNormal;
+                                        args.eyePathVertex1.m_tangentWS = rco.m_hitTangent;
+
+                                        args.WSpatialOverPSpatial0 = ysVec4_one;
+                                        args.WDirectionalOverPDirectional01 = ysVec4_one;
+
+                                        radiance += SampleRadiance_Bi(args);
+
+                                        break;
+                                    }
+                                    default:
+                                    {
+                                        ysAssert(false);
+                                        break;
+                                    }
+                                }
                             }
                             pixel->m_value += radiance;
                             break;

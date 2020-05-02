@@ -123,18 +123,37 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                     s_pixelCountY = yCount;
                 }
 
-                ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
                 ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
-                ImGui::Checkbox("Sample Light", &s_renderInput.m_sampleLight);
 
                 const char* renderModes[] = { "Global Illumination", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
-                ImGui::Combo("RenderMode", &selectedRenderMode, renderModes, 3);
+                ImGui::Combo("Render Mode", &selectedRenderMode, renderModes, 3);
                 switch (selectedRenderMode)
                 {
                     case 0:
+                    {
                         s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
+
+                        const char* giMethods[] = { "Uni-directional", "Bi-directional" };
+                        static int selectedGiMethod = 1;
+                        ImGui::Combo("GI Method", &selectedGiMethod, giMethods, 2);
+                        switch (selectedGiMethod)
+                        {
+                            case 0:
+                            {
+                                s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional;
+                                ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
+                                ImGui::Checkbox("Sample Light", &s_renderInput.m_sampleLight);
+                                break;
+                            }
+                            case 1:
+                            {
+                                s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional;
+                                break;
+                            }
+                        }
                         break;
+                    }
                     case 1:
                         s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_normals;
                         break;
@@ -371,15 +390,16 @@ static void sCreateScene()
 
     const ys_float32 asdf = 0.8f;
     const ys_float32 qwer = 0.5f;
+    const ys_float32 asdf2 = -0.8f;
     triangles[10].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf) * ysSplat(h);
     triangles[10].m_vertices[1] = ysVecSet(qwer, -qwer, asdf) * ysSplat(h);
     triangles[10].m_vertices[2] = ysVecSet(qwer, qwer, asdf) * ysSplat(h);
     triangles[10].m_twoSided = true;
     triangles[10].m_materialType = ysMaterialType::e_standard;
     triangles[10].m_materialTypeIndex = 4;
-    triangles[11].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf) * ysSplat(h);
-    triangles[11].m_vertices[1] = ysVecSet(qwer, qwer, asdf) * ysSplat(h);
-    triangles[11].m_vertices[2] = ysVecSet(-qwer, qwer, asdf) * ysSplat(h);
+    triangles[11].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf2) * ysSplat(h);
+    triangles[11].m_vertices[1] = ysVecSet(qwer, qwer, asdf2) * ysSplat(h);
+    triangles[11].m_vertices[2] = ysVecSet(-qwer, qwer, asdf2) * ysSplat(h);
     triangles[11].m_twoSided = true;
     triangles[11].m_materialType = ysMaterialType::e_standard;
     triangles[11].m_materialTypeIndex = 4;
@@ -388,13 +408,13 @@ static void sCreateScene()
     materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[0].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[0].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 0.0f, 0.0f);
+    materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 0.25f, 0.25f);
     materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[1].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[2].m_albedoDiffuse = ysVecSet(0.0f, 0.0f, 1.0f);
+    materialStandards[2].m_albedoDiffuse = ysVecSet(0.25f, 0.25f, 1.0f);
     materialStandards[2].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[2].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[3].m_albedoDiffuse = ysVecSet(0.0f, 1.0f, 0.0f);
+    materialStandards[3].m_albedoDiffuse = ysVecSet(0.25f, 1.0f, 0.25f);
     materialStandards[3].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[3].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[4].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
