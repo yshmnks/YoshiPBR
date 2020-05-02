@@ -534,7 +534,7 @@ struct PathVertex
     // 1: probability per projected solid angle of generating the direction to move forward on this subpath.
     // ... If not finite, the corresponding probability per projected solid angle is delta(w-w0), and m_probProj[i] is expected to 1.0
     ys_float32 m_probProj[2];
-    ys_float32 m_probFinite[2];
+    bool m_probFinite[2];
 
     // conversion factor from per-projected-solid-angle to per-area probabilities. Corresponds to the m_probProj[1].
     // Note: The conversion factor for m_probProj[0] lives on the previous vertex.
@@ -1039,10 +1039,12 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             return ysVec4_zero;
         }
 
+        ys_float32 d12 = ysLength3(v12);
+
         ysSceneRayCastInput srci;
         srci.m_origin = x1->m_posWS + u12 * ysSplat(rayCastNudge);
         srci.m_direction = v12;
-        srci.m_maxLambda = ysLength3(v12) - rayCastNudge;
+        srci.m_maxLambda = (d12 - rayCastNudge) / d12;
 
         ysSceneRayCastOutput srco;
         bool hit = RayCastClosest(&srco, srci);
@@ -1315,9 +1317,9 @@ void ysScene::DoRenderWork(ysRender* target) const
                                     {
                                         SampleRadiance_Bi_Args args;
                                         args.minLightPathVertexCount = 1;
-                                        args.maxLightPathVertexCount = 8;
+                                        args.maxLightPathVertexCount = 1;
                                         args.minEyePathVertexCount = 2;
-                                        args.maxEyePathVertexCount = 8;
+                                        args.maxEyePathVertexCount = 2;
 
                                         args.eyePathVertex0.m_shape = nullptr;
                                         args.eyePathVertex0.m_material = nullptr;
