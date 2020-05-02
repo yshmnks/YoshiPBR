@@ -632,7 +632,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     ysAssert(sMax < sCeil && tMax < tCeil);
     // light path must contain at least one vertex
     // eye   path must contain at least two vertices AND they must be pregenerated
-    ysAssert(sMin >= 1 && tMax >= 2);
+    ysAssert(sMin >= 0 && tMax >= 2);
 
     // Probability to generate the first non-virtual point on the Light(L). Don't forget to account for random light selection!
     ys_float32 probArea_L1;
@@ -647,6 +647,11 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     while (true) // This while loop is just a convenient trick to terminate the path due to things like Russian Roulette. We should never actually reenter.
     {
         ysAssert(s == 0); // No reentry
+        if (s >= sMax)
+        {
+            break;
+        }
+
         ysVec4 emittedIrradiance;
         {
             // Vertex 0: Pick a point on the light
@@ -1004,10 +1009,11 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     /////////////////////////////////
     // Join light and eye subpaths //
     /////////////////////////////////
-    ysAssert(s > 0 && t > 1);
-    PathVertex* x1 = y + (s - 1); // The last vertex on the light path
-    PathVertex* x2 = z + (t - 1); // The last vertex on the  eye  path
+    ysAssert(s >= 0 && t >= 2);
+    if (s > 0 && t > 0)
     {
+        PathVertex* x1 = y + (s - 1); // The last vertex on the light path
+        PathVertex* x2 = z + (t - 1); // The last vertex on the  eye  path
         ysVec4 v12 = x2->m_posWS - x1->m_posWS;
         ys_float32 d12Sqr = ysLengthSqr3(v12);
         if (d12Sqr < divZeroThresh)
@@ -1128,13 +1134,24 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ysAssert(s > 0 || t > 0);
         if (s == 0)
         {
-            ysAssert(false);
-            estimatorJoin = ysVec4_zero; // TODO: Should be the emitted radiance
+            ysAssert(t >= 2);
+            const PathVertex& z1 = z[t - 1];
+            const PathVertex& z0 = z[t - 2];
+            ysMtx44 R1;
+            {
+                R1.cx = z1.m_tangentWS;
+                R1.cy = ysCross(z1.m_normalWS, z1.m_tangentWS);
+                R1.cz = z1.m_normalWS;
+            }
+            ysVec4 v10 = z0.m_posWS - z1.m_posWS;
+            ysVec4 u10 = ysNormalize3(v10);
+            ysVec4 u10_LS1 = ysMulT33(R1, u10);
+            estimatorJoin = z1.m_material->EvaluateEmittedRadiance(this, u10_LS1, ysVec4_unitZ, ysVec4_unitX);
         }
         else if (t == 0)
         {
             ysAssert(false);
-            estimatorJoin = ysVec4_zero; // TODO: Shoudl be the emitted importance
+            estimatorJoin = ysVec4_zero; // TODO: Should be the emitted importance
         }
         else
         {
@@ -1316,8 +1333,8 @@ void ysScene::DoRenderWork(ysRender* target) const
                                     case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
                                     {
                                         SampleRadiance_Bi_Args args;
-                                        args.minLightPathVertexCount = 1;
-                                        args.maxLightPathVertexCount = 1;
+                                        args.minLightPathVertexCount = 0;
+                                        args.maxLightPathVertexCount = 0;
                                         args.minEyePathVertexCount = 2;
                                         args.maxEyePathVertexCount = 2;
 
