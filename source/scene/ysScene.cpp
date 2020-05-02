@@ -1098,7 +1098,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         x2->m_probProj[1] = probAngle321 / u21_LS2.z;
         x2->m_probFinite[0] = true;
         x2->m_probFinite[1] = true;
-        x2->m_f = x1->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
+        x2->m_f = x2->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
     }
 
     ////////////////////////////////////
