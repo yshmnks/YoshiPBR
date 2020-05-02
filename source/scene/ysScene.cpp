@@ -543,6 +543,7 @@ struct PathVertex
     // BRDF for scattering at this point... or if this is the vertex on the light/sensor, the directional distribution of emitted radiance/
     // importance (directional distribution of radiance is the the radiance divided by the integral of radiance over projected solid angle)
     ysVec4 m_f;
+    bool m_fFinite;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -567,7 +568,7 @@ struct InputEyePathVertex
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ysScene::SampleRadiance_Bi_Args
+struct ysScene::GenerateSubpathInput
 {
     ys_int32 minLightPathVertexCount;
     ys_int32 maxLightPathVertexCount;
@@ -588,7 +589,7 @@ struct ysScene::SampleRadiance_Bi_Args
     ysVec4 WSpatialOverPSpatial0;
     // WDirectional: Directional distribution of importance from the point on the sensor (vertex 0) to the first point in the scene (vertex 1).
     // PDirectional: The probability per projected solid angle (relative to the sensor) for generating vertex 1 given vertex 0.
-    ysVec4 WDirectionalOverPDirectional1;
+    ysVec4 WDirectionalOverPDirectional01;
 
     // Remarks:
     // - For a finite sensor, the two parameters above can each be broken down into numerator and denominator. However, we consume the
@@ -612,42 +613,57 @@ struct ysScene::SampleRadiance_Bi_Args
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
+struct ysScene::GenerateSubpathOutput
+{
+    static const ys_int32 s_nLCeil = 16;
+    static const ys_int32 s_nECeil = 16;
+    PathVertex m_y[s_nLCeil]; // light-path vertices
+    PathVertex m_z[s_nECeil]; //   eye-path vertices
+    ys_int32 m_nL;
+    ys_int32 m_nE;
+    ys_float32 m_dPdA_L0;
+    ys_float32 m_dPdA_W0;
+    ysVec4 m_estimatorFactor_L0; // The emitted irradiance divided by the per-area-probability of generating vertex 0 of the light subpath
+    ysVec4 m_estimatorFactor_W0; // ........... importance .................................................................  eye  .......
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubpathInput& input) const
 {
     const ys_float32 rayCastNudge = 0.001f; // Hack. Push ray cast origins out a little to avoid collision with the source shape.
     const ys_float32 divZeroThresh = ys_epsilon; // Prevent unsafe division.
 
-    const ys_int32 sCeil = 16;
-    const ys_int32 tCeil = 16;
-    PathVertex y[sCeil]; // light-path vertices
-    PathVertex z[sCeil]; //   eye-path vertices
-    ys_int32 s = 0;
-    ys_int32 t = 2;
+    PathVertex* y = output->m_y;
+    PathVertex* z = output->m_z;
 
-    const ys_int32 sMin = args.minLightPathVertexCount;
-    const ys_int32 sMax = args.maxLightPathVertexCount;
-    const ys_int32 tMin = args.minEyePathVertexCount;
-    const ys_int32 tMax = args.maxEyePathVertexCount;
-    ysAssert(sMin <= sMax && tMin <= tMax);
-    ysAssert(sMax < sCeil && tMax < tCeil);
-    // light path must contain at least one vertex
-    // eye   path must contain at least two vertices AND they must be pregenerated
-    ysAssert(sMin >= 0 && tMax >= 2);
+    const ys_int32 nLMin = input.minLightPathVertexCount;
+    const ys_int32 nLMax = input.maxLightPathVertexCount;
+    const ys_int32 nEMin = input.minEyePathVertexCount;
+    const ys_int32 nEMax = input.maxEyePathVertexCount;
+    ysAssert(nLMin <= nLMax && nEMin <= nEMax);
+    ysAssert(nLMax <= GenerateSubpathOutput::s_nLCeil && nEMax <= GenerateSubpathOutput::s_nECeil);
+    // Eye path must contain at least two vertices AND they must be pregenerated
+    ysAssert(nLMin >= 0 && nEMin >= 2);
 
-    // Probability to generate the first non-virtual point on the Light(L). Don't forget to account for random light selection!
-    ys_float32 probArea_L1;
-    ys_float32 probArea_W1 = -1.0f; // TODO
+    ys_int32 nL;
+    ys_int32 nE;
+
+    // Probability to generate the first point on the Light. Don't forget to account for random light selection!
+    ys_float32 probArea_L0;
+    ys_float32 probArea_W0 = -1.0f; // TODO
 
     ysVec4 LSpatialOverPSpatial0;
-    ysVec4 WSpatialOverPSpatial0 = args.WSpatialOverPSpatial0;
+    ysVec4 WSpatialOverPSpatial0 = input.WSpatialOverPSpatial0;
 
     ////////////////////////////////
     // Generate the LIGHT subpath //
     ////////////////////////////////
+    nL = 0;
     while (true) // This while loop is just a convenient trick to terminate the path due to things like Russian Roulette. We should never actually reenter.
     {
-        ysAssert(s == 0); // No reentry
-        if (s >= sMax)
+        ysAssert(nL == 0); // No reentry
+        if (nL >= nLMax)
         {
             break;
         }
@@ -661,29 +677,30 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ys_int32 emissiveShapeIdx = m_emissiveShapeIndices[emissiveShapeIdxIdx];
             const ysShape* emissiveShape = m_shapes + emissiveShapeIdx;
             ysSurfacePoint sp;
-            emissiveShape->GenerateRandomSurfacePoint(this, &sp, &probArea_L1);
-            probArea_L1 /= ys_float32(m_emissiveShapeCount); // Note this division!
+            emissiveShape->GenerateRandomSurfacePoint(this, &sp, &probArea_L0);
+            probArea_L0 /= ys_float32(m_emissiveShapeCount); // Note this division!
 
             const ysMaterial* emissiveMaterial = m_materials + emissiveShape->m_materialId.m_index;
             emittedIrradiance = emissiveMaterial->EvaluateEmittedIrradiance(this);
-            LSpatialOverPSpatial0 = emittedIrradiance / ysSplat(probArea_L1);
+            LSpatialOverPSpatial0 = emittedIrradiance / ysSplat(probArea_L0);
 
-            y[s].m_material = m_materials + emissiveShape->m_materialId.m_index;
-            y[s].m_shape = emissiveShape;
-            y[s].m_posWS = sp.m_point;
-            y[s].m_normalWS = sp.m_normal;
-            y[s].m_tangentWS = sp.m_tangent;
-            y[s].m_probProj[0] = -1.0f;
-            y[s].m_probProj[1] = -1.0f;
-            y[s].m_probFinite[0] = false;
-            y[s].m_probFinite[1] = false;
-            y[s].m_projToArea1 = -1.0f;
-            y[s].m_f = -ysVec4_one;
+            y[nL].m_material = m_materials + emissiveShape->m_materialId.m_index;
+            y[nL].m_shape = emissiveShape;
+            y[nL].m_posWS = sp.m_point;
+            y[nL].m_normalWS = sp.m_normal;
+            y[nL].m_tangentWS = sp.m_tangent;
+            y[nL].m_probProj[0] = -1.0f;
+            y[nL].m_probProj[1] = -1.0f;
+            y[nL].m_probFinite[0] = false;
+            y[nL].m_probFinite[1] = false;
+            y[nL].m_projToArea1 = -1.0f;
+            y[nL].m_f = -ysVec4_one;
+            y[nL].m_fFinite = false;
 
-            s++;
+            nL++;
         }
 
-        if (s >= sMax)
+        if (nL >= nLMax)
         {
             break;
         }
@@ -691,8 +708,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         {
             // Vertex 1: This is a bit different from Vertices 2...s. Namely, the usual BSDF term is the directional distribution of the emitted radiance.
 
-            PathVertex* y1 = y + (s - 1);
-            PathVertex* y2 = y + (s - 0);
+            PathVertex* y1 = y + (nL - 1);
+            PathVertex* y2 = y + (nL - 0);
 
             ysMtx44 R1; // The frame at vertex 1
             {
@@ -716,7 +733,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ysVec4 Ldirectional = emittedRadiance / emittedIrradiance;
 
             ys_float32 q = 1.0f; // Russian Roulette probability that we will attempt to produce y2.
-            if (s >= sMin)
+            if (nL >= nLMin)
             {
                 // We've already generated the minimum number of vertices requested. Do Russian Roulette termination.
                 ys_float32 f = ysMax(ysMax(Ldirectional.x, Ldirectional.y), Ldirectional.z);
@@ -730,6 +747,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             }
 
             y1->m_f = Ldirectional;
+            y1->m_fFinite = true;
 
             ysSceneRayCastInput srci;
             srci.m_maxLambda = ys_maxFloat;
@@ -777,15 +795,16 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             y2->m_probFinite[1] = false;
             y2->m_projToArea1 = -1.0f;
             y2->m_f = -ysVec4_one;
+            y2->m_fFinite = false;
 
-            s++;
+            nL++;
         }
 
-        while (s < sMax)
+        while (nL < nLMax)
         {
-            const PathVertex* y0 = y + (s - 2);
-            PathVertex* y1 = y + (s - 1);
-            PathVertex* y2 = y + (s - 0); // This is the potential new vertex
+            const PathVertex* y0 = y + (nL - 2);
+            PathVertex* y1 = y + (nL - 1);
+            PathVertex* y2 = y + (nL - 0); // This is the potential new vertex
 
             ysMtx44 R1; // The frame at vertex 1
             {
@@ -811,7 +830,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ysVec4 f012 = y1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
 
             ys_float32 q = 1.0f; // Russian Roulette probability that we will attempt to produce y2.
-            if (s >= sMin)
+            if (nL >= nLMin)
             {
                 // We've already generated the minimum number of vertices requested. Do Russian Roulette termination.
                 ys_float32 f = ysMax(ysMax(f012.x, f012.y), f012.z);
@@ -863,6 +882,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             y1->m_probFinite[1] = true;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
             y1->m_f = f012;
+            y1->m_fFinite = true;
 
             y2->m_shape = m_shapes + srco.m_shapeId.m_index;
             y2->m_material = m_materials + y2->m_shape->m_materialId.m_index;
@@ -876,8 +896,9 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             y2->m_probFinite[1] = false;
             y2->m_projToArea1 = -1.0f;
             y2->m_f = -ysVec4_one;
+            y2->m_fFinite = false;
 
-            s++;
+            nL++;
         }
 
         break;
@@ -887,8 +908,8 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
     // Generate the EYE subpath //
     //////////////////////////////
     {
-        args.eyePathVertex0.InitializePathVertex(z + 0);
-        args.eyePathVertex1.InitializePathVertex(z + 1);
+        input.eyePathVertex0.InitializePathVertex(z + 0);
+        input.eyePathVertex1.InitializePathVertex(z + 1);
         z[0].m_probProj[0] = -1.0f;
         z[0].m_probProj[1] = 1.0f;
         z[0].m_probFinite[0] = false;
@@ -906,15 +927,15 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ys_float32 c = ysDot3(u10, z[1].m_normalWS);
         ysAssert(c >= 0.0f && d10Sqr > divZeroThresh);
         z[0].m_projToArea1 = c / d10Sqr;
-        z[0].m_f = args.WDirectionalOverPDirectional1;
-
-        ysAssert(t == 2);
+        z[0].m_f = input.WDirectionalOverPDirectional01;
+        z[0].m_fFinite = false;
     }
-    while (t < tMax)
+    nE = 2;
+    while (nE < nEMax)
     {
-        const PathVertex* z0 = z + (t - 2);
-        PathVertex* z1 = z + (t - 1);
-        PathVertex* z2 = z + (t - 0);
+        const PathVertex* z0 = z + (nE - 2);
+        PathVertex* z1 = z + (nE - 1);
+        PathVertex* z2 = z + (nE - 0);
 
         ysMtx44 R1;
         {
@@ -940,7 +961,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ysVec4 f210 = z1->m_material->EvaluateBRDF(this, u12_LS1, u10_LS1);
 
         ys_float32 q = 1.0f;
-        if (s >= sMin)
+        if (nE >= nEMin)
         {
             ys_float32 f = ysMax(ysMax(f210.x, f210.y), f210.z);
             ys_float32 q = ysMin(1.0f, f / probProj012);
@@ -989,6 +1010,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         z1->m_probProj[1] = probProj012 * q;
         z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
         z1->m_f = f210;
+        z1->m_fFinite = true;
 
         z2->m_shape = m_shapes + srco.m_shapeId.m_index;
         z2->m_material = m_materials + z2->m_shape->m_materialId.m_index;
@@ -1002,9 +1024,38 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         z2->m_probFinite[1] = false;
         z2->m_projToArea1 = -1.0f;
         z2->m_f = -ysVec4_one;
+        z2->m_fFinite = false;
 
-        t++;
+        nE++;
     }
+
+    output->m_nL = nL;
+    output->m_nE = nE;
+    output->m_dPdA_L0 = probArea_L0;
+    output->m_dPdA_W0 = probArea_W0;
+    output->m_estimatorFactor_L0 = LSpatialOverPSpatial0;
+    output->m_estimatorFactor_W0 = WSpatialOverPSpatial0;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths, ys_int32 s, ys_int32 t) const
+{
+    const ys_float32 rayCastNudge = 0.001f; // Hack. Push ray cast origins out a little to avoid collision with the source shape.
+    const ys_float32 divZeroThresh = ys_epsilon; // Prevent unsafe division.
+
+    ysAssert(0 <= s && s <= subpaths.m_nL);
+    ysAssert(2 <= t && t <= subpaths.m_nE);
+    PathVertex yz[GenerateSubpathOutput::s_nLCeil + GenerateSubpathOutput::s_nECeil];
+    PathVertex* y = yz + 0;
+    PathVertex* z = yz + s;
+    ysMemCpy(y, subpaths.m_y, sizeof(PathVertex) * s);
+    ysMemCpy(z, subpaths.m_z, sizeof(PathVertex) * t);
+
+    const ysVec4& LSpatialOverPSpatial0 = subpaths.m_estimatorFactor_L0;
+    const ysVec4& WSpatialOverPSpatial0 = subpaths.m_estimatorFactor_W0;
+    const ys_float32& probArea_L0 = subpaths.m_dPdA_L0;
+    const ys_float32& probArea_W0 = subpaths.m_dPdA_W0;
 
     /////////////////////////////////
     // Join light and eye subpaths //
@@ -1077,6 +1128,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             x1->m_probProj[1] = probAngle12 / u12_LS1.z;
             x1->m_probFinite[1] = true;
             x1->m_f = L / LSpatial;
+            x1->m_fFinite = true;
         }
         else
         {
@@ -1092,6 +1144,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             x1->m_probFinite[0] = true;
             x1->m_probFinite[1] = true;
             x1->m_f = x1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
+            x1->m_fFinite = true;
         }
 
         PathVertex* x3 = z + (t - 2);
@@ -1105,6 +1158,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         x2->m_probFinite[0] = true;
         x2->m_probFinite[1] = true;
         x2->m_f = x2->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
+        x2->m_fFinite = true;
     }
 
     ////////////////////////////////////
@@ -1123,11 +1177,13 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         }
 
         ysVec4 estimatorE = ysVec4_one;
-        estimatorE *= WSpatialOverPSpatial0;
-        estimatorE *= args.WDirectionalOverPDirectional1;
-        for (ys_int32 i = 1; i < t - 1; ++i)
+        if (t > 0)
         {
-            estimatorE *= z[i].m_f / ysSplat(z[i].m_probProj[1]);
+            estimatorE *= WSpatialOverPSpatial0;
+            for (ys_int32 i = 0; i < t - 1; ++i)
+            {
+                estimatorE *= z[i].m_f / ysSplat(z[i].m_probProj[1]);
+            }
         }
 
         ysVec4 estimatorJoin;
@@ -1160,7 +1216,7 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ysVec4 g = ysSplat(y[s - 1].m_projToArea1);
             estimatorJoin = y[s - 1].m_f * g * z[t - 1].m_f;
         }
-        
+
         estimator = estimatorL * estimatorJoin * estimatorE;
         ysAssert(ysAllGE3(estimator, ysVec4_zero));
     }
@@ -1173,10 +1229,10 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
         ysAssert(s >= 0 && t >= 0 && s + t >= 2);
 
         // pRatioL[i] = P[i-1] / P[i] ... where P[n] is the full path probability assuming y[n] is the last vertex on the light subpath.
-        ys_float32 pRatioL[sCeil] = { -1.0f };
+        ys_float32 pRatioL[GenerateSubpathOutput::s_nLCeil] = { -1.0f };
         if (s > 1)
         {
-            pRatioL[0] = (y[1].m_probProj[0] * y[0].m_projToArea1) / probArea_L1;
+            pRatioL[0] = (y[1].m_probProj[0] * y[0].m_projToArea1) / probArea_L0;
             for (ys_int32 i = 1; i < s - 1; ++i)
             {
                 // The probability to generate y[i-1]->y[i] as part of the light subpath
@@ -1190,16 +1246,16 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ys_float32 p01 = y[s - 2].m_probProj[1] * y[s - 2].m_projToArea1;
             ys_float32 p21 = (t > 0)
                 ? z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1
-                : probArea_W1;
+                : probArea_W0;
             pRatioL[s - 1] = p21 / p01;
         }
         else if (s == 1)
         {
             ysAssert(t > 0);
-            pRatioL[0] = (z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1) / probArea_L1;
+            pRatioL[0] = (z[t - 1].m_probProj[1] * z[t - 1].m_projToArea1) / probArea_L0;
         }
 
-        ys_float32 pRatioE[tCeil] = { -1.0f };
+        ys_float32 pRatioE[GenerateSubpathOutput::s_nECeil] = { -1.0f };
         if (t > 1)
         {
             //pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
@@ -1213,15 +1269,15 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
             ys_float32 p01 = z[t - 2].m_probProj[1] * z[t - 2].m_projToArea1;
             ys_float32 p21 = (s > 0)
                 ? y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1
-                : probArea_L1;
+                : probArea_L0;
             pRatioE[t - 1] = p21 / p01;
         }
         else if (t == 1)
         {
             ysAssert(s > 0);
-            pRatioE[0] = (y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1) / probArea_W1;
+            pRatioE[0] = (y[s - 1].m_probProj[1] * y[s - 1].m_projToArea1) / probArea_W0;
         }
-        
+
         ys_float32 weightInv;
         {
             weightInv = 1.0f;
@@ -1246,6 +1302,25 @@ ysVec4 ysScene::SampleRadiance_Bi(const SampleRadiance_Bi_Args& args) const
 
     ysVec4 weightedEstimator = ysSplat(weight) * estimator;
     return weightedEstimator;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::SampleRadiance_Bi(const GenerateSubpathInput& input) const
+{
+    GenerateSubpathOutput subpaths;
+    GenerateSubpaths(&subpaths, input);
+
+    ysVec4 radiance = ysVec4_zero;
+    for (ys_int32 s = 0; s < subpaths.m_nL; ++s)
+    {
+        for (ys_int32 t = 2; t < subpaths.m_nE; ++t)
+        {
+            radiance += EvaluateTruncatedSubpaths(subpaths, s, t);
+        }
+    }
+
+    return radiance;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1332,11 +1407,11 @@ void ysScene::DoRenderWork(ysRender* target) const
                                     }
                                     case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
                                     {
-                                        SampleRadiance_Bi_Args args;
-                                        args.minLightPathVertexCount = 0;
-                                        args.maxLightPathVertexCount = 0;
+                                        GenerateSubpathInput args;
+                                        args.minLightPathVertexCount = 1;
+                                        args.maxLightPathVertexCount = 8;
                                         args.minEyePathVertexCount = 2;
-                                        args.maxEyePathVertexCount = 2;
+                                        args.maxEyePathVertexCount = 8;
 
                                         args.eyePathVertex0.m_shape = nullptr;
                                         args.eyePathVertex0.m_material = nullptr;
@@ -1351,7 +1426,7 @@ void ysScene::DoRenderWork(ysRender* target) const
                                         args.eyePathVertex1.m_tangentWS = rco.m_hitTangent;
 
                                         args.WSpatialOverPSpatial0 = ysVec4_one;
-                                        args.WDirectionalOverPDirectional1 = ysVec4_one;
+                                        args.WDirectionalOverPDirectional01 = ysVec4_one;
 
                                         radiance += SampleRadiance_Bi(args);
 

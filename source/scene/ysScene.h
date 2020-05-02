@@ -40,8 +40,11 @@ struct ysScene
 
     ysVec4 SampleRadiance(const ysSurfaceData&, ys_int32 bounceCount, ys_int32 maxBounceCount, bool sampleLight) const;
 
-    struct SampleRadiance_Bi_Args;
-    ysVec4 SampleRadiance_Bi(const SampleRadiance_Bi_Args&) const;
+    struct GenerateSubpathInput;
+    struct GenerateSubpathOutput;
+    void GenerateSubpaths(GenerateSubpathOutput*, const GenerateSubpathInput&) const;
+    ysVec4 EvaluateTruncatedSubpaths(const GenerateSubpathOutput&, ys_int32 truncatedEyeSubpathVertexCount, ys_int32 truncatedLightSubpathVertexCount) const;
+    ysVec4 SampleRadiance_Bi(const GenerateSubpathInput&) const;
 
     void DoRenderWork(ysRender* target) const;
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput& input) const;
