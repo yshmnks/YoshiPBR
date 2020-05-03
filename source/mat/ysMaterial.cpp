@@ -72,133 +72,151 @@ bool ysMaterial::IsEmissive(const ysScene* scene) const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMaterial::GenerateRandomDirection(const ysScene* scene,
-    const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity) const
+ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScene* scene,
+    const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS) const
 {
+    ysDirectionalProbabilityDensity p;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, probabilityDensity);
+            p = subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
         default:
+        {
             ysAssert(false);
+            p.SetInvalid();
+            break;
+        }
     }
-    ysAssert(*probabilityDensity >= 0.0f);
-    ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*outgoingDirectionLS));
+    ysAssert(p.IsValid());
+    ysAssert(p.m_probabilityPerSolidAngle == 0.0f || ysIsApproximatelyNormalized3(*outgoingDirectionLS));
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMaterial::GenerateRandomDirection(const ysScene* scene,
-    ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS, ys_float32* probabilityDensity) const
+ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScene* scene,
+    ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
 {
+    ysDirectionalProbabilityDensity p;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, probabilityDensity);
+            p = subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
         default:
+        {
             ysAssert(false);
+            p.SetInvalid();
+            break;
+        }
     }
-    ysAssert(*probabilityDensity >= 0.0f);
-    ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*incomingDirectionLS));
+    ysAssert(p.IsValid());
+    ysAssert(p.m_probabilityPerSolidAngle == 0.0f || ysIsApproximatelyNormalized3(*incomingDirectionLS));
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMaterial::GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS, ys_float32* probabilityDensity) const
+ysDirectionalProbabilityDensity ysMaterial::GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS) const
 {
+    ysDirectionalProbabilityDensity p;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            subMat.GenerateRandomEmission(emittedDirectionLS, probabilityDensity);
+            p = subMat.GenerateRandomEmission(emittedDirectionLS);
             break;
         }
         default:
+        {
             ysAssert(false);
+            p.SetInvalid();
+            break;
+        }
     }
-    ysAssert(*probabilityDensity >= 0.0f);
-    ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*emittedDirectionLS));
+    ysAssert(p.IsValid());
+    ysAssert(p.m_probabilityPerSolidAngle == 0.0f || ysIsApproximatelyNormalized3(*emittedDirectionLS));
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterial::ProbabilityDensityForGeneratedIncomingDirection(const ysScene* scene,
+ysDirectionalProbabilityDensity ysMaterial::ProbabilityDensityForGeneratedIncomingDirection(const ysScene* scene,
     const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
 {
-    ys_float32 probDens;
+    ysDirectionalProbabilityDensity p;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            probDens = subMat.ProbabilityDensityForGeneratedIncomingDirection(incomingDirectionLS, outgoingDirectionLS);
+            p = subMat.ProbabilityDensityForGeneratedIncomingDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
         default:
         {
             ysAssert(false);
-            probDens = 0.0f;
+            p.SetInvalid();
             break;
         }
     }
-    ysAssert(probDens >= 0.0f);
-    return probDens;
+    ysAssert(p.IsValid());
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterial::ProbabilityDensityForGeneratedOutgoingDirection(const ysScene* scene,
+ysDirectionalProbabilityDensity ysMaterial::ProbabilityDensityForGeneratedOutgoingDirection(const ysScene* scene,
     const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
 {
-    ys_float32 probDens;
+    ysDirectionalProbabilityDensity p;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            probDens = subMat.ProbabilityDensityForGeneratedOutgoingDirection(incomingDirectionLS, outgoingDirectionLS);
+            p = subMat.ProbabilityDensityForGeneratedOutgoingDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
         default:
         {
             ysAssert(false);
-            probDens = 0.0f;
+            p.SetInvalid();
             break;
         }
     }
-    ysAssert(probDens >= 0.0f);
-    return probDens;
+    ysAssert(p.IsValid());
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterial::ProbabilityDensityForGeneratedEmission(const ysScene* scene, const ysVec4& emittedDirectionLS) const
+ysDirectionalProbabilityDensity ysMaterial::ProbabilityDensityForGeneratedEmission(const ysScene* scene, const ysVec4& emittedDirectionLS) const
 {
-    ys_float32 probDens;
+    ysDirectionalProbabilityDensity p;
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            probDens = subMat.ProbabilityDensityForGeneratedEmission(emittedDirectionLS);
+            p = subMat.ProbabilityDensityForGeneratedEmission(emittedDirectionLS);
             break;
         }
         default:
         {
             ysAssert(false);
-            probDens = 0.0f;
+            p.SetInvalid();
             break;
         }
     }
-    ysAssert(probDens >= 0.0f);
-    return probDens;
+    ysAssert(p.IsValid());
+    return p;
 }

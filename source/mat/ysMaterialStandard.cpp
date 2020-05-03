@@ -30,55 +30,100 @@ bool ysMaterialStandard::IsEmissive() const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMaterialStandard::GenerateRandomDirection(const ysVec4& incomingLS, ysVec4* outgoingLS, ys_float32* probabilityDensity) const
+ysDirectionalProbabilityDensity ysMaterialStandard::GenerateRandomDirection(const ysVec4& incomingLS, ysVec4* outgoingLS) const
 {
-    // Importance sample pdf(theta) = cos(theta)/pi
-    //                   cdf(theta) = (1-cos(2*theta))/2
+    // Importance sample per-solid-angle probability  pdf(theta) = cos(theta) / pi
+    //                                                cdf(theta) = (1 - cos(2*theta)) / 2
+    //                                                ==> cos(theta) = sqrt(1 - cdf)
+    // An equivalent description is that we are sampling per-PROJECTED-solid-angle probability 1/pi. This corresponds to uniform sampling of
+    // the 2D unit disc where the remapping r=sin(theta) gives the 3D direction. A 2D ring has area 2pi*r*dr = pi*d(r^2), so we sample r^2
+    // with uniform random variable v, or equivalently, sin(theta) = sqrt(v)
+    //                                                ==> cos(theta) = sqrt(1 - v) ... which is identical to our first result.
     ys_float32 u = ysRandom(0.0f, 1.0f);
     ys_float32 v = ysRandom(0.0f, 1.0f);
     ys_float32 phi = ys_2pi * u;
     ys_float32 cosTheta = sqrtf(1.0f - v);
     ys_float32 sinTheta = sqrtf(v);
     *outgoingLS = ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
-    *probabilityDensity = cosTheta / ys_pi;
+    ysDirectionalProbabilityDensity p;
+    p.m_probabilityPerSolidAngle = cosTheta / ys_pi;
+    p.m_probabilityPerSolidAngleInv = ysSafeReciprocal(cosTheta) * ys_pi;
+    p.m_probabilityPerProjectedSolidAngle = 1.0f / ys_pi;
+    p.m_probabilityPerProjectedSolidAngleInv = ys_pi;
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMaterialStandard::GenerateRandomDirection(ysVec4* incomingLS, const ysVec4& outgoingLS, ys_float32* probabilityDensity) const
+ysDirectionalProbabilityDensity ysMaterialStandard::GenerateRandomDirection(ysVec4* incomingLS, const ysVec4& outgoingLS) const
 {
-    GenerateRandomDirection(outgoingLS, incomingLS, probabilityDensity);
+    return GenerateRandomDirection(outgoingLS, incomingLS);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMaterialStandard::GenerateRandomEmission(ysVec4* emittedDirectionLS, ys_float32* probabilityDensity) const
+ysDirectionalProbabilityDensity ysMaterialStandard::GenerateRandomEmission(ysVec4* emittedDirectionLS) const
 {
     ys_float32 phi = ys_2pi * ysRandom(0.0f, 1.0f);
     ys_float32 cosTheta = ysRandom(0.0f, 1.0f);
     ys_float32 sinTheta = sqrtf(ysMax(0.0f, 1.0f - cosTheta * cosTheta));
     *emittedDirectionLS = ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
-    *probabilityDensity = 1.0f / ys_2pi;
+    ysDirectionalProbabilityDensity p;
+    p.m_probabilityPerSolidAngle = 1.0f / ys_2pi;
+    p.m_probabilityPerSolidAngleInv = ys_2pi;
+    p.m_probabilityPerProjectedSolidAngle = ysSafeReciprocal(cosTheta) / ys_2pi;
+    p.m_probabilityPerProjectedSolidAngleInv = cosTheta * ys_2pi;
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterialStandard::ProbabilityDensityForGeneratedIncomingDirection(const ysVec4& inLS, const ysVec4& outLS) const
+ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGeneratedIncomingDirection(const ysVec4& inLS, const ysVec4& outLS) const
 {
     return ProbabilityDensityForGeneratedOutgoingDirection(outLS, inLS);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterialStandard::ProbabilityDensityForGeneratedOutgoingDirection(const ysVec4& inLS, const ysVec4& outLS) const
+ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGeneratedOutgoingDirection(const ysVec4& inLS, const ysVec4& outLS) const
 {
     ysAssert(ysAbs(ysLength3(outLS) - 1.0f) < 0.001f);
-    return ysMax(outLS.z, 0.0f) / ys_pi;
+    ysDirectionalProbabilityDensity p;
+    if (outLS.z > 0.0f)
+    {
+        p.m_probabilityPerSolidAngle = outLS.z / ys_pi;
+        p.m_probabilityPerSolidAngleInv = ysSafeReciprocal(outLS.z) * ys_pi;
+        p.m_probabilityPerProjectedSolidAngle = 1.0f / ys_pi;
+        p.m_probabilityPerProjectedSolidAngleInv = ys_pi;
+    }
+    else
+    {
+        p.m_probabilityPerSolidAngle = 0.0f;
+        p.m_probabilityPerSolidAngleInv = 0.0f;
+        p.m_probabilityPerProjectedSolidAngle = 0.0f;
+        p.m_probabilityPerProjectedSolidAngleInv = 0.0f;
+    }
+    return p;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterialStandard::ProbabilityDensityForGeneratedEmission(const ysVec4& emittedDirectionLS) const
+ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGeneratedEmission(const ysVec4& emittedDirectionLS) const
 {
-    return (emittedDirectionLS.z > 0.0f) ? 1.0f / ys_2pi : 0.0f;
+    ysDirectionalProbabilityDensity p;
+    if (emittedDirectionLS.z > 0.0f)
+    {
+        p.m_probabilityPerSolidAngle = 1.0f / ys_2pi;
+        p.m_probabilityPerSolidAngleInv = ys_2pi;
+        p.m_probabilityPerProjectedSolidAngle = ysSafeReciprocal(emittedDirectionLS.z) / ys_2pi;
+        p.m_probabilityPerProjectedSolidAngleInv = emittedDirectionLS.z * ys_2pi;
+    }
+    else
+    {
+        p.m_probabilityPerSolidAngle = 0.0f;
+        p.m_probabilityPerSolidAngleInv = 0.0f;
+        p.m_probabilityPerProjectedSolidAngle = 0.0f;
+        p.m_probabilityPerProjectedSolidAngleInv = 0.0f;
+    }
+    return p;
 }
