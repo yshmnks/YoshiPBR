@@ -1062,7 +1062,6 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ys_float32 d12Sqr = ysLengthSqr3(v12);
         if (d12Sqr < divZeroThresh)
         {
-            // What about the other connections?
             return ysVec4_zero;
         }
 
@@ -1085,7 +1084,6 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 u21_LS2 = ysMulT33(R2, -u12);
         if (u12_LS1.z < divZeroThresh || u21_LS2.z < divZeroThresh)
         {
-            // What about the other connections?
             return ysVec4_zero;
         }
 
@@ -1175,7 +1173,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
 
-            for (ys_int32 i = t - 1; i > rrBeginE; --i, ++idx)
+            for (ys_int32 i = t - 1; i > 0; --i, ++idx)
             {
                 if (idx < rrBeginL)
                 {
@@ -1210,7 +1208,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
 
-            for (ys_int32 i = t - 1; i > rrBeginL; --i, ++idx)
+            for (ys_int32 i = s - 1; i > 0; --i, ++idx)
             {
                 if (idx < rrBeginE)
                 {
@@ -1378,16 +1376,124 @@ ysVec4 ysScene::SampleRadiance_Bi(const GenerateSubpathInput& input) const
     GenerateSubpathOutput subpaths;
     GenerateSubpaths(&subpaths, input);
 
-    ysVec4 radiance = ysVec4_zero;
-    for (ys_int32 s = 0; s < subpaths.m_nL; ++s)
+    if (subpaths.m_nL + subpaths.m_nE < 2)
     {
-        for (ys_int32 t = 2; t < subpaths.m_nE; ++t)
+        return ysVec4_zero;
+    }
+
+    ysVec4 radiance = ysVec4_zero;
+    for (ys_int32 s = 0; s <= subpaths.m_nL; ++s)
+    {
+        ys_int32 tBegin = ysMax(0, 2 - s);
+        tBegin = 2; // Require at least two eye vertices for now
+        for (ys_int32 t = tBegin; t <= subpaths.m_nE; ++t)
         {
             radiance += EvaluateTruncatedSubpaths(subpaths, s, t);
         }
     }
 
     return radiance;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixelDirLS) const
+{
+    ysVec4 pixelDirWS = ysRotate(input.m_eye.q, pixelDirLS);
+
+    ysSceneRayCastInput rci;
+    rci.m_maxLambda = ys_maxFloat;
+    rci.m_direction = pixelDirWS;
+    rci.m_origin = input.m_eye.p;
+
+    ysSceneRayCastOutput rco;
+    bool hit = RayCastClosest(&rco, rci);
+
+    ysVec4 pixelValue = ysVec4_zero;
+    switch (input.m_renderMode)
+    {
+        case ysSceneRenderInput::RenderMode::e_regular:
+        {
+            ysVec4 radiance = ysVec4_zero;
+            if (hit)
+            {
+                const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
+                const ysMaterial* material = m_materials + shape->m_materialId.m_index;
+
+                ysSurfaceData surfaceData;
+                surfaceData.m_shape = shape;
+                surfaceData.m_material = material;
+                surfaceData.m_posWS = rco.m_hitPoint;
+                surfaceData.m_normalWS = rco.m_hitNormal;
+                surfaceData.m_tangentWS = rco.m_hitTangent;
+                surfaceData.m_incomingDirectionWS = -pixelDirWS;
+
+                switch (input.m_giMethod)
+                {
+                    case ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional:
+                    {
+                        // To be precise, what we should actually accumulate here is...
+                        //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel
+                        // ... where dP/dwproj is the probability per projected solid angle of sampling this point on the pixel
+                        //           wproj_pixel is the projected solid angle subtended by the pixel as seen by the eye.
+                        // Now for our specific implementation, we sample uniformly across the pixel's area such that dP/dwproj = wproj_pixel
+                        // (here we have assumed that the pixel subtends an infinitesimal solid angle)
+                        // Therefore, we merely need to accumulate radiance += SampleRadiance
+                        radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, input.m_sampleLight);
+                        break;
+                    }
+                    case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
+                    {
+                        GenerateSubpathInput args;
+                        args.minLightPathVertexCount = ysMin(1, input.m_maxLightSubpathVertexCount);
+                        args.maxLightPathVertexCount = input.m_maxLightSubpathVertexCount;
+                        args.minEyePathVertexCount = 2;
+                        args.maxEyePathVertexCount = ysMax(2, input.m_maxEyeSubpathVertexCount);
+
+                        args.eyePathVertex0.m_shape = nullptr;
+                        args.eyePathVertex0.m_material = nullptr;
+                        args.eyePathVertex0.m_posWS = input.m_eye.p;
+                        args.eyePathVertex0.m_normalWS = ysVec4_zero;
+                        args.eyePathVertex0.m_tangentWS = ysVec4_zero;
+
+                        args.eyePathVertex1.m_shape = shape;
+                        args.eyePathVertex1.m_material = material;
+                        args.eyePathVertex1.m_posWS = rco.m_hitPoint;
+                        args.eyePathVertex1.m_normalWS = rco.m_hitNormal;
+                        args.eyePathVertex1.m_tangentWS = rco.m_hitTangent;
+
+                        args.WSpatialOverPSpatial0 = ysVec4_one;
+                        args.WDirectionalOverPDirectional01 = ysVec4_one;
+
+                        radiance += SampleRadiance_Bi(args);
+
+                        break;
+                    }
+                    default:
+                    {
+                        ysAssert(false);
+                        break;
+                    }
+                }
+            }
+            pixelValue = radiance;
+            break;
+        }
+        case ysSceneRenderInput::RenderMode::e_normals:
+        {
+            ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
+            pixelValue = normalColor;
+            break;
+        }
+        case ysSceneRenderInput::RenderMode::e_depth:
+        {
+            ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
+            pixelValue = ysSplat(depth);
+            break;
+        }
+    }
+
+    return pixelValue;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1428,100 +1534,9 @@ void ysScene::DoRenderWork(ysRender* target) const
                 {
                     ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
                     ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
-
                     ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
-                    ysVec4 pixelDirWS = ysRotate(input.m_eye.q, pixelDirLS);
-
-                    ysSceneRayCastInput rci;
-                    rci.m_maxLambda = ys_maxFloat;
-                    rci.m_direction = pixelDirWS;
-                    rci.m_origin = input.m_eye.p;
-
-                    ysSceneRayCastOutput rco;
-                    bool hit = RayCastClosest(&rco, rci);
-
-                    switch (input.m_renderMode)
-                    {
-                        case ysSceneRenderInput::RenderMode::e_regular:
-                        {
-                            ysVec4 radiance = ysVec4_zero;
-                            if (hit)
-                            {
-                                const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
-                                const ysMaterial* material = m_materials + shape->m_materialId.m_index;
-
-                                ysSurfaceData surfaceData;
-                                surfaceData.m_shape = shape;
-                                surfaceData.m_material = material;
-                                surfaceData.m_posWS = rco.m_hitPoint;
-                                surfaceData.m_normalWS = rco.m_hitNormal;
-                                surfaceData.m_tangentWS = rco.m_hitTangent;
-                                surfaceData.m_incomingDirectionWS = -pixelDirWS;
-
-                                switch (input.m_giMethod)
-                                {
-                                    case ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional:
-                                    {
-                                        // To be precise, what we should actually accumulate here is...
-                                        //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel
-                                        // ... where dP/dwproj is the probability per projected solid angle of sampling this point on the pixel
-                                        //           wproj_pixel is the projected solid angle subtended by the pixel as seen by the eye.
-                                        // Now for our specific implementation, we sample uniformly across the pixel's area such that dP/dwproj = wproj_pixel
-                                        // (here we have assumed that the pixel subtends an infinitesimal solid angle)
-                                        // Therefore, we merely need to accumulate radiance += SampleRadiance
-                                        radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, input.m_sampleLight);
-                                        break;
-                                    }
-                                    case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
-                                    {
-                                        GenerateSubpathInput args;
-                                        args.minLightPathVertexCount = 1;
-                                        args.maxLightPathVertexCount = 8;
-                                        args.minEyePathVertexCount = 2;
-                                        args.maxEyePathVertexCount = 8;
-
-                                        args.eyePathVertex0.m_shape = nullptr;
-                                        args.eyePathVertex0.m_material = nullptr;
-                                        args.eyePathVertex0.m_posWS = input.m_eye.p;
-                                        args.eyePathVertex0.m_normalWS = ysVec4_zero;
-                                        args.eyePathVertex0.m_tangentWS = ysVec4_zero;
-
-                                        args.eyePathVertex1.m_shape = shape;
-                                        args.eyePathVertex1.m_material = material;
-                                        args.eyePathVertex1.m_posWS = rco.m_hitPoint;
-                                        args.eyePathVertex1.m_normalWS = rco.m_hitNormal;
-                                        args.eyePathVertex1.m_tangentWS = rco.m_hitTangent;
-
-                                        args.WSpatialOverPSpatial0 = ysVec4_one;
-                                        args.WDirectionalOverPDirectional01 = ysVec4_one;
-
-                                        radiance += SampleRadiance_Bi(args);
-
-                                        break;
-                                    }
-                                    default:
-                                    {
-                                        ysAssert(false);
-                                        break;
-                                    }
-                                }
-                            }
-                            pixel->m_value += radiance;
-                            break;
-                        }
-                        case ysSceneRenderInput::RenderMode::e_normals:
-                        {
-                            ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
-                            pixel->m_value += normalColor;
-                            break;
-                        }
-                        case ysSceneRenderInput::RenderMode::e_depth:
-                        {
-                            ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
-                            pixel->m_value += ysSplat(depth);
-                            break;
-                        }
-                    }
+                    ysVec4 deltaValue = RenderPixel(input, pixelDirLS);
+                    pixel->m_value += deltaValue;
                 }
                 pixel->m_value *= ysSplat(samplesPerPixelInv);
                 pixel->m_isNull = false;
@@ -1541,6 +1556,39 @@ void ysScene::Render(ysSceneRenderOutput* output, const ysSceneRenderInput& inpu
     render.DoWork();
     render.GetOutputFinal(output);
     render.Destroy();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene::DebugRenderPixel(const ysSceneRenderInput& input, ys_float32 pixelX, ys_float32 pixelY) const
+{
+    if (input.m_samplesPerPixel <= 0)
+    {
+        return ysVec4_zero;
+    }
+    ys_float32 samplesPerPixelInv = 1.0f / (ys_float32)input.m_samplesPerPixel;
+
+    const ys_float32 aspectRatio = ys_float32(input.m_pixelCountX) / ys_float32(input.m_pixelCountY);
+    const ys_float32 height = tanf(input.m_fovY);
+    const ys_float32 width = height * aspectRatio;
+    const ys_float32 pixelHeight = height / ys_float32(input.m_pixelCountY);
+    const ys_float32 pixelWidth = width / ys_float32(input.m_pixelCountX);
+
+    ys_float32 yFraction = 1.0f - 2.0f * (pixelY + 1.0f) / ys_float32(input.m_pixelCountY);
+    ys_float32 xFraction = 2.0f * (pixelX + 1.0f) / ys_float32(input.m_pixelCountX) - 1.0f;
+    ys_float32 yMid = height * yFraction;
+    ys_float32 xMid = width * xFraction;
+
+    ysVec4 pixelValue = ysVec4_zero;
+    for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
+    {
+        ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+        ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+        ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+        ysVec4 deltaValue = RenderPixel(input, pixelDirLS);
+        pixelValue += deltaValue;
+    }
+    pixelValue *= ysSplat(samplesPerPixelInv);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1632,6 +1680,14 @@ void ysScene_Render(ysSceneId id, ysSceneRenderOutput* output, const ysSceneRend
 {
     ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
     ysScene::s_scenes[id.m_index]->Render(output, input);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysVec4 ysScene_DebugRenderPixel(ysSceneId id, const ysSceneRenderInput& input, const ys_float32 pixelX, const ys_float32 pixelY)
+{
+    ysAssert(ysScene::s_scenes[id.m_index] != nullptr);
+    return ysScene::s_scenes[id.m_index]->DebugRenderPixel(input, pixelX, pixelY);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

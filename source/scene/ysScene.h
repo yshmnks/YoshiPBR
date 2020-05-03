@@ -46,8 +46,11 @@ struct ysScene
     ysVec4 EvaluateTruncatedSubpaths(const GenerateSubpathOutput&, ys_int32 truncatedEyeSubpathVertexCount, ys_int32 truncatedLightSubpathVertexCount) const;
     ysVec4 SampleRadiance_Bi(const GenerateSubpathInput&) const;
 
+    ysVec4 RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixelDirLS) const;
     void DoRenderWork(ysRender* target) const;
     void Render(ysSceneRenderOutput* output, const ysSceneRenderInput& input) const;
+
+    ysVec4 DebugRenderPixel(const ysSceneRenderInput& input, ys_float32 pixelX, ys_float32 pixelY) const;
 
     void DebugDrawGeo(const ysDrawInputGeo&) const;
     void DebugDrawLights(const ysDrawInputLights&) const;
