@@ -1062,7 +1062,6 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ys_float32 d12Sqr = ysLengthSqr3(v12);
         if (d12Sqr < divZeroThresh)
         {
-            // What about the other connections?
             return ysVec4_zero;
         }
 
@@ -1085,7 +1084,6 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 u21_LS2 = ysMulT33(R2, -u12);
         if (u12_LS1.z < divZeroThresh || u21_LS2.z < divZeroThresh)
         {
-            // What about the other connections?
             return ysVec4_zero;
         }
 
@@ -1175,7 +1173,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
 
-            for (ys_int32 i = t - 1; i > rrBeginE; --i, ++idx)
+            for (ys_int32 i = t - 1; i > 0; --i, ++idx)
             {
                 if (idx < rrBeginL)
                 {
@@ -1210,7 +1208,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
 
-            for (ys_int32 i = t - 1; i > rrBeginL; --i, ++idx)
+            for (ys_int32 i = s - 1; i > 0; --i, ++idx)
             {
                 if (idx < rrBeginE)
                 {
