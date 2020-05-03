@@ -149,6 +149,8 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                             case 1:
                             {
                                 s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional;
+                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_renderInput.m_maxLightSubpathVertexCount, 0, 16);
+                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_renderInput.m_maxEyeSubpathVertexCount, 2, 16);
                                 break;
                             }
                         }

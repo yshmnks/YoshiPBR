@@ -160,9 +160,10 @@ struct ysSceneRenderInput
         m_pixelCountX = 0;
         m_pixelCountY = 0;
         m_maxBounceCount = 1;
+        m_maxLightSubpathVertexCount = 1;
+        m_maxEyeSubpathVertexCount = 2;
         m_samplesPerPixel = 16;
         m_sampleLight = true;
-        m_useRussianRouletteTermination = true;
 
         m_renderMode = RenderMode::e_regular;
         m_giMethod = GlobalIlluminationMethod::e_biDirectional;
@@ -178,8 +179,12 @@ struct ysSceneRenderInput
     ys_int32 m_pixelCountX;
     ys_int32 m_pixelCountY;
 
-    // 1 is direct illumination only.
+    // For unidirectional path tracing. 1 is direct illumination only.
     ys_int32 m_maxBounceCount;
+
+    // For bidirectional path tracing.
+    ys_int32 m_maxLightSubpathVertexCount;
+    ys_int32 m_maxEyeSubpathVertexCount;
 
     ys_int32 m_samplesPerPixel;
 
@@ -187,8 +192,6 @@ struct ysSceneRenderInput
     // lower variance. Enable this if you wish to sample the lights directly; the results will be combined via Multiple Importance Sampling.
     // (Irrelevant for bidirectional path tracing as one of the two paths already starts at lights)
     bool m_sampleLight;
-
-    bool m_useRussianRouletteTermination;
 
     RenderMode m_renderMode;
     GlobalIlluminationMethod m_giMethod;

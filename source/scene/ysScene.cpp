@@ -1376,10 +1376,17 @@ ysVec4 ysScene::SampleRadiance_Bi(const GenerateSubpathInput& input) const
     GenerateSubpathOutput subpaths;
     GenerateSubpaths(&subpaths, input);
 
-    ysVec4 radiance = ysVec4_zero;
-    for (ys_int32 s = 0; s < subpaths.m_nL; ++s)
+    if (subpaths.m_nL + subpaths.m_nE < 2)
     {
-        for (ys_int32 t = 2; t < subpaths.m_nE; ++t)
+        return ysVec4_zero;
+    }
+
+    ysVec4 radiance = ysVec4_zero;
+    for (ys_int32 s = 0; s <= subpaths.m_nL; ++s)
+    {
+        ys_int32 tBegin = ysMax(0, 2 - s);
+        tBegin = 2; // Require at least two eye vertices for now
+        for (ys_int32 t = tBegin; t <= subpaths.m_nE; ++t)
         {
             radiance += EvaluateTruncatedSubpaths(subpaths, s, t);
         }
@@ -1473,10 +1480,10 @@ void ysScene::DoRenderWork(ysRender* target) const
                                     case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
                                     {
                                         GenerateSubpathInput args;
-                                        args.minLightPathVertexCount = 1;
-                                        args.maxLightPathVertexCount = 8;
+                                        args.minLightPathVertexCount = ysMin(1, input.m_maxLightSubpathVertexCount);
+                                        args.maxLightPathVertexCount = input.m_maxLightSubpathVertexCount;
                                         args.minEyePathVertexCount = 2;
-                                        args.maxEyePathVertexCount = 8;
+                                        args.maxEyePathVertexCount = ysMax(2, input.m_maxEyeSubpathVertexCount);
 
                                         args.eyePathVertex0.m_shape = nullptr;
                                         args.eyePathVertex0.m_material = nullptr;
