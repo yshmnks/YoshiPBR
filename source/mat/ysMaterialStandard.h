@@ -7,7 +7,7 @@
 struct ysMaterialStandard
 {
     ysVec4 EvaluateBRDF(const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
-    ysVec4 EvaluateEmittedRadiance(const ysVec4& direction, const ysVec4& normal, const ysVec4& tangent) const;
+    ysVec4 EvaluateEmittedRadiance(const ysVec4& directionLS) const;
     ysVec4 EvaluateEmittedIrradiance() const;
 
     bool IsEmissive() const;

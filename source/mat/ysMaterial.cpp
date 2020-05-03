@@ -21,14 +21,14 @@ ysVec4 ysMaterial::EvaluateBRDF(const ysScene* scene, const ysVec4& incomingDire
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysVec4 ysMaterial::EvaluateEmittedRadiance(const ysScene* scene, const ysVec4& direction, const ysVec4& normal, const ysVec4& tangent) const
+ysVec4 ysMaterial::EvaluateEmittedRadiance(const ysScene* scene, const ysVec4& direction) const
 {
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            return subMat.EvaluateEmittedRadiance(direction, normal, tangent);
+            return subMat.EvaluateEmittedRadiance(direction);
         }
         default:
             ysAssert(false);

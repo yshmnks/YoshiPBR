@@ -18,7 +18,7 @@ struct ysMaterial
     ysVec4 EvaluateBRDF(const ysScene* scene, const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
     // Get the radiance emitted in 'direction' from a surface element oriented with 'normal' and 'tangent'
-    ysVec4 EvaluateEmittedRadiance(const ysScene*, const ysVec4& direction, const ysVec4& normal, const ysVec4& tangent) const;
+    ysVec4 EvaluateEmittedRadiance(const ysScene*, const ysVec4& directionLS) const;
 
     // Get the emitted irradiance. This is the integral of the emitted radiance over all projected solid angles.
     ysVec4 EvaluateEmittedIrradiance(const ysScene*) const;
