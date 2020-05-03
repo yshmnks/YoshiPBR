@@ -1,6 +1,7 @@
 #pragma once
 
 #include "YoshiPBR/ysMath.h"
+#include "common/ysProbability.h"
 
 struct ysScene;
 
@@ -25,20 +26,20 @@ struct ysMaterial
 
     bool IsEmissive(const ysScene*) const;
 
-    void GenerateRandomDirection(const ysScene* scene,
-        const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity) const;
+    ysDirectionalProbabilityDensity GenerateRandomDirection(const ysScene* scene,
+        const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS) const;
 
-    void GenerateRandomDirection(const ysScene* scene,
-        ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS, ys_float32* probabilityDensity) const;
+    ysDirectionalProbabilityDensity GenerateRandomDirection(const ysScene* scene,
+        ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
-    void GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS, ys_float32* probabilityDensity) const;
+    ysDirectionalProbabilityDensity GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS) const;
 
-    ys_float32 ProbabilityDensityForGeneratedIncomingDirection(const ysScene*,
+    ysDirectionalProbabilityDensity ProbabilityDensityForGeneratedIncomingDirection(const ysScene*,
         const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
-    ys_float32 ProbabilityDensityForGeneratedOutgoingDirection(const ysScene*,
+    ysDirectionalProbabilityDensity ProbabilityDensityForGeneratedOutgoingDirection(const ysScene*,
         const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
-    ys_float32 ProbabilityDensityForGeneratedEmission(const ysScene*, const ysVec4& emittedDirectionLS) const;
+    ysDirectionalProbabilityDensity ProbabilityDensityForGeneratedEmission(const ysScene*, const ysVec4& emittedDirectionLS) const;
 
     Type m_type;
     ys_int32 m_typeIndex;

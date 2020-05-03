@@ -2,6 +2,8 @@ set(YOSHIPBR_SOURCE_FILES
 	common/ysDebugDraw.cpp
     common/ysLock.cpp
     common/ysMath.cpp
+    common/ysProbability.cpp
+    common/ysProbability.h
 	common/ysStructures.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp

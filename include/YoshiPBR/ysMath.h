@@ -90,6 +90,8 @@ extern const ysTransform ysTransform_identity;
 extern const ysMtx44 ysMtx44_zero;
 extern const ysMtx44 ysMtx44_identity;
 
+ys_float32 ysSafeReciprocal(ys_float32);
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // The unspecified channels are set to 0
 ysVec4 ysVecSet(ys_float32 x, ys_float32 y, ys_float32 z, ys_float32 w);
@@ -126,13 +128,17 @@ T ysMax(const T& a, const T& b)
     return (a > b) ? a : b;
 }
 template <typename T>
+T ysClamp(const T& unclamped, const T& min, const T& max)
+{
+    return ysMin(ysMax(min, unclamped), max);
+}
+template <typename T>
 T ysAbs(const T& a)
 {
     return ysMax(a, -a);
 }
 ysVec4 ysMin(const ysVec4&, const ysVec4&);
 ysVec4 ysMax(const ysVec4&, const ysVec4&);
-ysVec4 ysClamp(const ysVec4& unclamped, const ysVec4& min, const ysVec4& max);
 ysVec4 ysAbs(const ysVec4&);
 
 bool ysAllLT3(const ysVec4&, const ysVec4&);
