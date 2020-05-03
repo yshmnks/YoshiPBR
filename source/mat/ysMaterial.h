@@ -26,7 +26,10 @@ struct ysMaterial
     bool IsEmissive(const ysScene*) const;
 
     void GenerateRandomDirection(const ysScene* scene,
-        ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const;
+        const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity) const;
+
+    void GenerateRandomDirection(const ysScene* scene,
+        ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS, ys_float32* probabilityDensity) const;
 
     void GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS, ys_float32* probabilityDensity) const;
 

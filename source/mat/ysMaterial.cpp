@@ -73,14 +73,14 @@ bool ysMaterial::IsEmissive(const ysScene* scene) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysMaterial::GenerateRandomDirection(const ysScene* scene,
-    ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const
+    const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity) const
 {
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            subMat.GenerateRandomDirection(outgoingDirectionLS, probabilityDensity, incomingDirectionLS);
+            subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, probabilityDensity);
             break;
         }
         default:
@@ -88,6 +88,26 @@ void ysMaterial::GenerateRandomDirection(const ysScene* scene,
     }
     ysAssert(*probabilityDensity >= 0.0f);
     ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*outgoingDirectionLS));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysMaterial::GenerateRandomDirection(const ysScene* scene,
+    ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS, ys_float32* probabilityDensity) const
+{
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, probabilityDensity);
+            break;
+        }
+        default:
+            ysAssert(false);
+    }
+    ysAssert(*probabilityDensity >= 0.0f);
+    ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*incomingDirectionLS));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -314,7 +314,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
         {
             ysVec4 w10_LS1;
             ys_float32 pAngle;
-            mat1->GenerateRandomDirection(this, &w10_LS1, &pAngle, w12_LS1);
+            mat1->GenerateRandomDirection(this, &w10_LS1, w12_LS1, &pAngle);
             ysAssert(pAngle >= 0.0f);
             ysVec4 w10 = ysMul33(R1, w10_LS1);
             if (pAngle >= ys_epsilon) // Prevent division by zero
@@ -819,7 +819,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
             ysVec4 u12_LS1;
             ys_float32 probAngle012;
-            y1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
+            y1->m_material->GenerateRandomDirection(this, u10_LS1, &u12_LS1, &probAngle012);
             ysAssert(u12_LS1.z >= 0.0f);
             if (u12_LS1.z < divZeroThresh)
             {
@@ -950,7 +950,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
         ysVec4 u12_LS1;
         ys_float32 probAngle012;
-        z1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
+        z1->m_material->GenerateRandomDirection(this, &u12_LS1, u10_LS1, &probAngle012);
         ysAssert(u12_LS1.z >= 0.0f);
         if (u12_LS1.z < divZeroThresh)
         {
