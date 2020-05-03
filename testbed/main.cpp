@@ -20,6 +20,10 @@ static bool s_rightMouseDown = false;
 static ys_float32 s_uiScale = 1.0f;
 static ys_float32 s_mouseX = 0.0f;
 static ys_float32 s_mouseY = 0.0f;
+static ys_float32 s_debugPixelX = 0.0f;
+static ys_float32 s_debugPixelY = 0.0f;
+static ysVec4 s_debugPixelValue = ysVec4_zero;
+static bool s_debugRenderPixel = false;
 
 static ysArrayG<Color> s_pixels = ysArrayG<Color>();
 static ys_int32 s_pixelCountX = 0;
@@ -102,14 +106,10 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImVec2 button_sz = ImVec2(-1, 0);
                 if (ImGui::Button("Render", button_sz))
                 {
-                    ys_float32 aspectRatio = (ys_float32)windowWidth / (ys_float32)windowHeight;
-                    ys_int32 xCount = ys_int32(aspectRatio * windowHeight);
-                    ys_int32 yCount = windowHeight;
-
                     s_renderInput.m_eye = g_camera.ComputeEyeTransform();
                     s_renderInput.m_fovY = g_camera.m_verticalFov;
-                    s_renderInput.m_pixelCountY = yCount;
-                    s_renderInput.m_pixelCountX = xCount;
+                    s_renderInput.m_pixelCountX = windowWidth;
+                    s_renderInput.m_pixelCountY = windowHeight;
 
                     if (s_renderId != ys_nullRenderId)
                     {
@@ -118,9 +118,9 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                     s_renderId = ysScene_CreateRender(s_sceneId, s_renderInput);
                     ysRender_BeginWork(s_renderId);
 
-                    s_pixels.SetCount(xCount * yCount);
-                    s_pixelCountX = xCount;
-                    s_pixelCountY = yCount;
+                    s_pixels.SetCount(windowWidth * windowHeight);
+                    s_pixelCountX = windowWidth;
+                    s_pixelCountY = windowHeight;
                 }
 
                 ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
@@ -172,6 +172,36 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 }
                 ImGui::EndTabItem();
             }
+
+            if (ImGui::BeginTabItem("Pixel Debugger"))
+            {
+                ys_int32 mouseXY[2] = { (ys_int32)s_mouseX, (ys_int32)s_mouseY };
+                ImGui::InputInt2("Mouse", mouseXY, ImGuiInputTextFlags_ReadOnly);
+
+                ImVec2 button_sz = ImVec2(-1, 0);
+                if (s_debugRenderPixel)
+                {
+                    ImGui::BulletText("Click to render");
+                }
+                else
+                {
+                    if (ImGui::Button("Prime", button_sz))
+                    {
+                        s_debugRenderPixel = true;
+                    }
+                }
+
+                ImGui::Separator();
+
+                ys_int32 pixelXY[2] = { (ys_int32)s_debugPixelX, (ys_int32)s_debugPixelY };
+                ImGui::InputInt2("Coordinates", pixelXY, ImGuiInputTextFlags_ReadOnly);
+
+                ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_Float;
+                ImGui::ColorEdit3("Value", (ys_float32*)&s_debugPixelValue.simd, flags);
+
+                ImGui::EndTabItem();
+            }
+
             ImGui::EndTabBar();
         }
         ImGui::End();
@@ -183,6 +213,8 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
 static void sResizeWindowCallback(GLFWwindow*, int width, int height)
 {
     g_camera.m_aspectRatio = (ys_float32)width / (ys_float32)height;
+    s_debugPixelX = ysMin(s_debugPixelX, (ys_float32)width);
+    s_debugPixelY = ysMin(s_debugPixelY, (ys_float32)height);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -222,6 +254,24 @@ static void sCharCallback(GLFWwindow* window, unsigned int c)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void sMouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
+    if (s_debugRenderPixel)
+    {
+        ys_int32 windowWidth;
+        ys_int32 windowHeight;
+        glfwGetWindowSize(g_mainWindow, &windowWidth, &windowHeight);
+
+        ysSceneRenderInput tmp = s_renderInput;
+        tmp.m_eye = g_camera.ComputeEyeTransform();
+        tmp.m_fovY = g_camera.m_verticalFov;
+        tmp.m_pixelCountY = windowHeight;
+        tmp.m_pixelCountX = windowWidth;
+        s_debugPixelValue = ysScene_DebugRenderPixel(s_sceneId, tmp, s_mouseX, s_mouseY);
+        s_debugPixelX = s_mouseX;
+        s_debugPixelY = s_mouseY;
+
+        s_debugRenderPixel = false;
+    }
+
     ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }
 
