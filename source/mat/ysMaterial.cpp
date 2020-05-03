@@ -131,8 +131,8 @@ void ysMaterial::GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDir
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterial::ProbabilityDensityForGeneratedDirection(const ysScene* scene,
-    const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const
+ys_float32 ysMaterial::ProbabilityDensityForGeneratedIncomingDirection(const ysScene* scene,
+    const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
 {
     ys_float32 probDens;
     switch (m_type)
@@ -140,7 +140,32 @@ ys_float32 ysMaterial::ProbabilityDensityForGeneratedDirection(const ysScene* sc
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            probDens = subMat.ProbabilityDensityForGeneratedDirection(outgoingDirectionLS, incomingDirectionLS);
+            probDens = subMat.ProbabilityDensityForGeneratedIncomingDirection(incomingDirectionLS, outgoingDirectionLS);
+            break;
+        }
+        default:
+        {
+            ysAssert(false);
+            probDens = 0.0f;
+            break;
+        }
+    }
+    ysAssert(probDens >= 0.0f);
+    return probDens;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ys_float32 ysMaterial::ProbabilityDensityForGeneratedOutgoingDirection(const ysScene* scene,
+    const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
+{
+    ys_float32 probDens;
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            probDens = subMat.ProbabilityDensityForGeneratedOutgoingDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
         default:

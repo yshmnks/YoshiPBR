@@ -33,8 +33,10 @@ struct ysMaterial
 
     void GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS, ys_float32* probabilityDensity) const;
 
-    ys_float32 ProbabilityDensityForGeneratedDirection(const ysScene*,
-        const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const;
+    ys_float32 ProbabilityDensityForGeneratedIncomingDirection(const ysScene*,
+        const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
+    ys_float32 ProbabilityDensityForGeneratedOutgoingDirection(const ysScene*,
+        const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const;
 
     ys_float32 ProbabilityDensityForGeneratedEmission(const ysScene*, const ysVec4& emittedDirectionLS) const;
 

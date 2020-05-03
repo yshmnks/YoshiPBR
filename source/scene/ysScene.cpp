@@ -505,7 +505,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                         }
                     }
 
-                    ys_float32 pAngleTmp = mat1->ProbabilityDensityForGeneratedDirection(this, w10_LS1, w12_LS1);
+                    ys_float32 pAngleTmp = mat1->ProbabilityDensityForGeneratedIncomingDirection(this, w10_LS1, w12_LS1);
                     denominator += pAngleTmp * pAngleTmp;
 
                     weight = numerator / denominator;
@@ -875,7 +875,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
                 break;
             }
 
-            y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
+            y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
             y1->m_probProj[1] = probProj012 * q;
             y1->m_probFinite[0] = true;
             y1->m_probFinite[1] = true;
@@ -1005,7 +1005,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             break;
         }
 
-        z1->m_probProj[0] = z1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
+        z1->m_probProj[0] = z1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u12_LS1, u10_LS1) / u10_LS1.z;
         z1->m_probProj[1] = probProj012 * q;
         z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
         z1->m_f = f210;
@@ -1136,8 +1136,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             ysVec4 v10 = x0->m_posWS - x1->m_posWS;
             ysVec4 u10 = ysNormalize3(v10);
             ysVec4 u10_LS1 = ysMulT33(R1, u10);
-            ys_float32 probAngle012 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u12_LS1, u10_LS1);
-            ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1);
+            ys_float32 probAngle012 = x1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u10_LS1, u12_LS1);
+            ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1);
             x1->m_probProj[0] = probAngle210 / u10_LS1.z;
             x1->m_probProj[1] = probAngle012 / u12_LS1.z;
             x1->m_probFinite[0] = true;
@@ -1150,8 +1150,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
         ysVec4 u23 = ysNormalize3(v23);
         ysVec4 u23_LS2 = ysMulT33(R2, u23);
-        ys_float32 probAngle123 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u23_LS2, u21_LS2);
-        ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
+        ys_float32 probAngle123 = x2->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u21_LS2, u23_LS2);
+        ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u21_LS2, u23_LS2);
         x2->m_probProj[0] = probAngle123 / u23_LS2.z;
         x2->m_probProj[1] = probAngle321 / u21_LS2.z;
         x2->m_probFinite[0] = true;
