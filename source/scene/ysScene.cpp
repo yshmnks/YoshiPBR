@@ -245,21 +245,20 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
     const ysShape* shape1 = surfaceData.m_shape;
     const ysMaterial* mat1 = surfaceData.m_material;
 
-    ysVec4 emittedRadiance = mat1->EvaluateEmittedRadiance(this, w12, n1, t1);
+    ysMtx44 R1; // The frame at surface 1
+    {
+        R1.cx = t1;
+        R1.cy = ysCross(n1, t1);
+        R1.cz = n1;
+    }
+    ysVec4 w12_LS1 = ysMulT33(R1, w12); // direction 1->2 expressed in the frame of surface 1 (LS1: "in the local space of surface 1").
+
+    ysVec4 emittedRadiance = mat1->EvaluateEmittedRadiance(this, w12_LS1);
 
     if (bounceCount == maxBounceCount)
     {
         return emittedRadiance;
     }
-
-    ysVec4 b1 = ysCross(n1, t1); // bitangent
-
-    ysMtx44 R1; // The frame at surface 1
-    R1.cx = t1;
-    R1.cy = b1;
-    R1.cz = n1;
-
-    ysVec4 w12_LS1 = ysMulT33(R1, w12); // direction 1->2 expressed in the frame of surface 1 (LS1: "in the local space of surface 1").
 
     // The space of directions to sample point lights is infinitesimal and therefore DISJOINT from the space of directions to sample
     // surfaces in general (including area lights, which are simpy emissive surfaces). Hence, we assign our point light samples the full
@@ -314,7 +313,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
         {
             ysVec4 w10_LS1;
             ys_float32 pAngle;
-            mat1->GenerateRandomDirection(this, &w10_LS1, &pAngle, w12_LS1);
+            mat1->GenerateRandomDirection(this, &w10_LS1, w12_LS1, &pAngle);
             ysAssert(pAngle >= 0.0f);
             ysVec4 w10 = ysMul33(R1, w10_LS1);
             if (pAngle >= ys_epsilon) // Prevent division by zero
@@ -506,7 +505,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                         }
                     }
 
-                    ys_float32 pAngleTmp = mat1->ProbabilityDensityForGeneratedDirection(this, w10_LS1, w12_LS1);
+                    ys_float32 pAngleTmp = mat1->ProbabilityDensityForGeneratedIncomingDirection(this, w10_LS1, w12_LS1);
                     denominator += pAngleTmp * pAngleTmp;
 
                     weight = numerator / denominator;
@@ -729,7 +728,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             ysVec4 u12 = ysMul33(R1, u12_LS1);
             ys_float32 probProj12 = probAngle12 / u12_LS1.z;
 
-            ysVec4 emittedRadiance = y1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
+            ysVec4 emittedRadiance = y1->m_material->EvaluateEmittedRadiance(this, u12_LS1);
             ysVec4 Ldirectional = emittedRadiance / emittedIrradiance;
 
             ys_float32 q = 1.0f; // Russian Roulette probability that we will attempt to produce y2.
@@ -819,7 +818,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
             ysVec4 u12_LS1;
             ys_float32 probAngle012;
-            y1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
+            y1->m_material->GenerateRandomDirection(this, u10_LS1, &u12_LS1, &probAngle012);
             ysAssert(u12_LS1.z >= 0.0f);
             if (u12_LS1.z < divZeroThresh)
             {
@@ -876,7 +875,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
                 break;
             }
 
-            y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
+            y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
             y1->m_probProj[1] = probProj012 * q;
             y1->m_probFinite[0] = true;
             y1->m_probFinite[1] = true;
@@ -950,7 +949,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
         ysVec4 u12_LS1;
         ys_float32 probAngle012;
-        z1->m_material->GenerateRandomDirection(this, &u12_LS1, &probAngle012, u10_LS1);
+        z1->m_material->GenerateRandomDirection(this, &u12_LS1, u10_LS1, &probAngle012);
         ysAssert(u12_LS1.z >= 0.0f);
         if (u12_LS1.z < divZeroThresh)
         {
@@ -1006,7 +1005,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             break;
         }
 
-        z1->m_probProj[0] = z1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1) / u10_LS1.z;
+        z1->m_probProj[0] = z1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u12_LS1, u10_LS1) / u10_LS1.z;
         z1->m_probProj[1] = probProj012 * q;
         z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
         z1->m_f = f210;
@@ -1123,7 +1122,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         {
             ysAssert(x1->m_material->IsEmissive(this));
             ysVec4 LSpatial = x1->m_material->EvaluateEmittedIrradiance(this);
-            ysVec4 L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1, ysVec4_unitZ, ysVec4_unitX);
+            ysVec4 L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1);
             ys_float32 probAngle12 = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
             x1->m_probProj[1] = probAngle12 / u12_LS1.z;
             x1->m_probFinite[1] = true;
@@ -1137,8 +1136,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             ysVec4 v10 = x0->m_posWS - x1->m_posWS;
             ysVec4 u10 = ysNormalize3(v10);
             ysVec4 u10_LS1 = ysMulT33(R1, u10);
-            ys_float32 probAngle012 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u12_LS1, u10_LS1);
-            ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedDirection(this, u10_LS1, u12_LS1);
+            ys_float32 probAngle012 = x1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u10_LS1, u12_LS1);
+            ys_float32 probAngle210 = x1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1);
             x1->m_probProj[0] = probAngle210 / u10_LS1.z;
             x1->m_probProj[1] = probAngle012 / u12_LS1.z;
             x1->m_probFinite[0] = true;
@@ -1151,8 +1150,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
         ysVec4 u23 = ysNormalize3(v23);
         ysVec4 u23_LS2 = ysMulT33(R2, u23);
-        ys_float32 probAngle123 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u23_LS2, u21_LS2);
-        ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedDirection(this, u21_LS2, u23_LS2);
+        ys_float32 probAngle123 = x2->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u21_LS2, u23_LS2);
+        ys_float32 probAngle321 = x2->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u21_LS2, u23_LS2);
         x2->m_probProj[0] = probAngle123 / u23_LS2.z;
         x2->m_probProj[1] = probAngle321 / u21_LS2.z;
         x2->m_probFinite[0] = true;
@@ -1202,7 +1201,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             ysVec4 v10 = z0.m_posWS - z1.m_posWS;
             ysVec4 u10 = ysNormalize3(v10);
             ysVec4 u10_LS1 = ysMulT33(R1, u10);
-            estimatorJoin = z1.m_material->EvaluateEmittedRadiance(this, u10_LS1, ysVec4_unitZ, ysVec4_unitX);
+            estimatorJoin = z1.m_material->EvaluateEmittedRadiance(this, u10_LS1);
         }
         else if (t == 0)
         {

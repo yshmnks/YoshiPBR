@@ -21,14 +21,14 @@ ysVec4 ysMaterial::EvaluateBRDF(const ysScene* scene, const ysVec4& incomingDire
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysVec4 ysMaterial::EvaluateEmittedRadiance(const ysScene* scene, const ysVec4& direction, const ysVec4& normal, const ysVec4& tangent) const
+ysVec4 ysMaterial::EvaluateEmittedRadiance(const ysScene* scene, const ysVec4& direction) const
 {
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            return subMat.EvaluateEmittedRadiance(direction, normal, tangent);
+            return subMat.EvaluateEmittedRadiance(direction);
         }
         default:
             ysAssert(false);
@@ -73,14 +73,14 @@ bool ysMaterial::IsEmissive(const ysScene* scene) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysMaterial::GenerateRandomDirection(const ysScene* scene,
-    ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity, const ysVec4& incomingDirectionLS) const
+    const ysVec4& incomingDirectionLS, ysVec4* outgoingDirectionLS, ys_float32* probabilityDensity) const
 {
     switch (m_type)
     {
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            subMat.GenerateRandomDirection(outgoingDirectionLS, probabilityDensity, incomingDirectionLS);
+            subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, probabilityDensity);
             break;
         }
         default:
@@ -88,6 +88,26 @@ void ysMaterial::GenerateRandomDirection(const ysScene* scene,
     }
     ysAssert(*probabilityDensity >= 0.0f);
     ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*outgoingDirectionLS));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysMaterial::GenerateRandomDirection(const ysScene* scene,
+    ysVec4* incomingDirectionLS, const ysVec4& outgoingDirectionLS, ys_float32* probabilityDensity) const
+{
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, probabilityDensity);
+            break;
+        }
+        default:
+            ysAssert(false);
+    }
+    ysAssert(*probabilityDensity >= 0.0f);
+    ysAssert(*probabilityDensity == 0.0f || ysIsApproximatelyNormalized3(*incomingDirectionLS));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,8 +131,8 @@ void ysMaterial::GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDir
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysMaterial::ProbabilityDensityForGeneratedDirection(const ysScene* scene,
-    const ysVec4& outgoingDirectionLS, const ysVec4& incomingDirectionLS) const
+ys_float32 ysMaterial::ProbabilityDensityForGeneratedIncomingDirection(const ysScene* scene,
+    const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
 {
     ys_float32 probDens;
     switch (m_type)
@@ -120,7 +140,32 @@ ys_float32 ysMaterial::ProbabilityDensityForGeneratedDirection(const ysScene* sc
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
-            probDens = subMat.ProbabilityDensityForGeneratedDirection(outgoingDirectionLS, incomingDirectionLS);
+            probDens = subMat.ProbabilityDensityForGeneratedIncomingDirection(incomingDirectionLS, outgoingDirectionLS);
+            break;
+        }
+        default:
+        {
+            ysAssert(false);
+            probDens = 0.0f;
+            break;
+        }
+    }
+    ysAssert(probDens >= 0.0f);
+    return probDens;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ys_float32 ysMaterial::ProbabilityDensityForGeneratedOutgoingDirection(const ysScene* scene,
+    const ysVec4& incomingDirectionLS, const ysVec4& outgoingDirectionLS) const
+{
+    ys_float32 probDens;
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            probDens = subMat.ProbabilityDensityForGeneratedOutgoingDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
         default:
