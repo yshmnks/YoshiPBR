@@ -175,8 +175,8 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
         }
         case ysSceneRenderInput::RenderMode::e_compare:
         {
-            const ys_int32 kernelHalfWidthX = 8;
-            const ys_int32 kernelHalfWidthY = 8;
+            const ys_int32 kernelHalfWidthX = 4;
+            const ys_int32 kernelHalfWidthY = 4;
             ys_float32 kernel[1 + 2 * kernelHalfWidthY][1 + 2 * kernelHalfWidthX];
             {
                 // Just uniformly average the values for now.
