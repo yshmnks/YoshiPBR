@@ -138,19 +138,68 @@ struct ysSceneRayCastOutput
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysGlobalIlluminationInput
+{
+    enum Type
+    {
+        e_undefined = -1,
+        e_uniDirectional,
+        e_biDirectional,
+    };
+
+    ysGlobalIlluminationInput()
+    {
+        m_type = e_undefined;
+    }
+
+    Type m_type;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysGlobalIlluminationInput_UniDirectional : public ysGlobalIlluminationInput
+{
+    ysGlobalIlluminationInput_UniDirectional()
+    {
+        m_type = Type::e_uniDirectional;
+        m_sampleLight = true;
+        m_maxBounceCount = 1;
+    }
+
+    // We always generate directions based on the BRDF. However, sometimes generating directions by sampling points on area lights may give
+    // lower variance. Enable this if you wish to sample the lights directly; the results will be combined via Multiple Importance Sampling.
+    // (Irrelevant for bidirectional path tracing as one of the two paths already starts at lights)
+    bool m_sampleLight;
+
+    // 1 is direct illumination only.
+    ys_int32 m_maxBounceCount;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysGlobalIlluminationInput_BiDirectional : public ysGlobalIlluminationInput
+{
+    ysGlobalIlluminationInput_BiDirectional()
+    {
+        m_type = Type::e_biDirectional;
+        m_maxLightSubpathVertexCount = 1;
+        m_maxEyeSubpathVertexCount = 2;
+    }
+
+    ys_int32 m_maxLightSubpathVertexCount;
+    ys_int32 m_maxEyeSubpathVertexCount;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysSceneRenderInput
 {
     enum RenderMode
     {
         e_regular,
+        e_compare,
         e_normals,
         e_depth,
-    };
-
-    enum GlobalIlluminationMethod
-    {
-        e_uniDirectional,
-        e_biDirectional,
     };
 
     ysSceneRenderInput()
@@ -159,14 +208,13 @@ struct ysSceneRenderInput
         m_fovY = 0.0f;
         m_pixelCountX = 0;
         m_pixelCountY = 0;
-        m_maxBounceCount = 1;
-        m_maxLightSubpathVertexCount = 1;
-        m_maxEyeSubpathVertexCount = 2;
         m_samplesPerPixel = 16;
-        m_sampleLight = true;
+        m_samplesPerPixelCompare = 16;
 
         m_renderMode = RenderMode::e_regular;
-        m_giMethod = GlobalIlluminationMethod::e_biDirectional;
+
+        m_giInput = nullptr;
+        m_giInputCompare = nullptr;
     }
 
     // For identity-eye-orientation, the eye looks down the -z axis (such that the x axis points right and y axis points up).
@@ -179,22 +227,15 @@ struct ysSceneRenderInput
     ys_int32 m_pixelCountX;
     ys_int32 m_pixelCountY;
 
-    // For unidirectional path tracing. 1 is direct illumination only.
-    ys_int32 m_maxBounceCount;
-
-    // For bidirectional path tracing.
-    ys_int32 m_maxLightSubpathVertexCount;
-    ys_int32 m_maxEyeSubpathVertexCount;
-
+    // We allow differing sample counts when comparing GI methods to account for the fact that a given method may exhibit lower or higher
+    // variance depending on the scene. What is most important for verifying correctness is that the estimators converge to the same value.
     ys_int32 m_samplesPerPixel;
-
-    // We always generate directions based on the BRDF. However, sometimes generating directions by sampling points on area lights may give
-    // lower variance. Enable this if you wish to sample the lights directly; the results will be combined via Multiple Importance Sampling.
-    // (Irrelevant for bidirectional path tracing as one of the two paths already starts at lights)
-    bool m_sampleLight;
+    ys_int32 m_samplesPerPixelCompare;
 
     RenderMode m_renderMode;
-    GlobalIlluminationMethod m_giMethod;
+
+    const ysGlobalIlluminationInput* m_giInput;
+    const ysGlobalIlluminationInput* m_giInputCompare;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

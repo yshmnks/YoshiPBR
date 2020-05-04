@@ -39,7 +39,11 @@ struct ysRender
     void Terminate();
 
     const ysScene* m_scene;
+
+    // Save off the input. This is a deep copy, which is why we have pre allocated some space for GI inputs.
     ysSceneRenderInput m_input;
+    ysGlobalIlluminationInput_UniDirectional m_inputsUni[2];
+    ysGlobalIlluminationInput_UniDirectional m_inputsBi[2];
 
     Pixel* m_pixels;
     ys_int32 m_pixelCount;

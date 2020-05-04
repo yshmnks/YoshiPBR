@@ -28,7 +28,9 @@ static bool s_debugRenderPixel = false;
 static ysArrayG<Color> s_pixels = ysArrayG<Color>();
 static ys_int32 s_pixelCountX = 0;
 static ys_int32 s_pixelCountY = 0;
-static ysSceneRenderInput s_renderInput = ysSceneRenderInput();
+static ysSceneRenderInput s_renderInput;
+static ysGlobalIlluminationInput_UniDirectional s_uniInput[2];
+static ysGlobalIlluminationInput_BiDirectional s_biInput[2];
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,9 +85,9 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
     int menuWidth = 256;
     if (g_settings.m_showUI)
     {
-        ImGui::SetNextWindowPos(ImVec2((float)windowWidth - menuWidth - 10, 10));
-        ImGui::SetNextWindowSize(ImVec2((float)menuWidth, (float)windowHeight - 20));
-        ImGui::Begin("Tools", &g_settings.m_showUI, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+        ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2((float)menuWidth, (float)windowHeight - 10.0f), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Tools", &g_settings.m_showUI);
         if (ImGui::BeginTabBar("ControlTabs", ImGuiTabBarFlags_None))
         {
             if (ImGui::BeginTabItem("Controls"))
@@ -123,16 +125,16 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                     s_pixelCountY = windowHeight;
                 }
 
-                ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
-
-                const char* renderModes[] = { "Global Illumination", "Normals", "Depth"};
+                const char* renderModes[] = { "Global Illumination", "Compare GI Methods (B - A)", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
-                ImGui::Combo("Render Mode", &selectedRenderMode, renderModes, 3);
+                ImGui::Combo("Render Mode", &selectedRenderMode, renderModes, 4);
+                ImGui::Separator();
                 switch (selectedRenderMode)
                 {
                     case 0:
                     {
                         s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
+                        ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
 
                         const char* giMethods[] = { "Uni-directional", "Bi-directional" };
                         static int selectedGiMethod = 1;
@@ -141,26 +143,93 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                         {
                             case 0:
                             {
-                                s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional;
-                                ImGui::SliderInt("Bounce Count", &s_renderInput.m_maxBounceCount, 0, 100);
-                                ImGui::Checkbox("Sample Light", &s_renderInput.m_sampleLight);
+                                s_renderInput.m_giInput = s_uniInput + 0;
+                                s_renderInput.m_giInputCompare = nullptr;
+                                ImGui::SliderInt("Bounce Count", &s_uniInput[0].m_maxBounceCount, 0, 100);
+                                ImGui::Checkbox("Sample Light", &s_uniInput[0].m_sampleLight);
                                 break;
                             }
                             case 1:
                             {
-                                s_renderInput.m_giMethod = ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional;
-                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_renderInput.m_maxLightSubpathVertexCount, 0, 16);
-                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_renderInput.m_maxEyeSubpathVertexCount, 2, 16);
+                                s_renderInput.m_giInput = s_biInput + 0;
+                                s_renderInput.m_giInputCompare = nullptr;
+                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_biInput[0].m_maxLightSubpathVertexCount, 0, 16);
+                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_biInput[0].m_maxEyeSubpathVertexCount, 2, 16);
                                 break;
                             }
                         }
                         break;
                     }
                     case 1:
-                        s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_normals;
+                    {
+                        s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_compare;
+                        
+                        const char* giMethods[] = { "Uni-directional", "Bi-directional" };
+
+                        ImGui::Columns(2, "");
+
+                        ImGui::SliderInt("Samples Per Pixel A", &s_renderInput.m_samplesPerPixel, 1, 1000);
+                        ImGui::NextColumn();
+                        ImGui::SliderInt("Samples Per Pixel B", &s_renderInput.m_samplesPerPixelCompare, 1, 1000);
+                        ImGui::NextColumn();
+
+                        static int selectedGiMethodA = 0;
+                        ImGui::Combo("GI Method A", &selectedGiMethodA, giMethods, 2);
+                        switch (selectedGiMethodA)
+                        {
+                            case 0:
+                            {
+                                s_renderInput.m_giInput = s_uniInput + 0;
+                                ImGui::SliderInt("Bounce Count", &s_uniInput[0].m_maxBounceCount, 0, 100);
+                                ImGui::Checkbox("Sample Light", &s_uniInput[0].m_sampleLight);
+                                break;
+                            }
+                            case 1:
+                            {
+                                s_renderInput.m_giInput = s_biInput + 0;
+                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_biInput[0].m_maxLightSubpathVertexCount, 0, 16);
+                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_biInput[0].m_maxEyeSubpathVertexCount, 2, 16);
+                                break;
+                            }
+                        }
+
+                        ImGui::NextColumn();
+
+                        static int selectedGiMethodB = 1;
+                        ImGui::Combo("GI Method B", &selectedGiMethodB, giMethods, 2);
+                        switch (selectedGiMethodB)
+                        {
+                            case 0:
+                            {
+                                s_renderInput.m_giInputCompare = s_uniInput + 1;
+                                ImGui::SliderInt("Bounce Count", &s_uniInput[1].m_maxBounceCount, 0, 100);
+                                ImGui::Checkbox("Sample Light", &s_uniInput[1].m_sampleLight);
+                                break;
+                            }
+                            case 1:
+                            {
+                                s_renderInput.m_giInputCompare = s_biInput + 1;
+                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_biInput[1].m_maxLightSubpathVertexCount, 0, 16);
+                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_biInput[1].m_maxEyeSubpathVertexCount, 2, 16);
+                                break;
+                            }
+                        }
+
+                        ImGui::Columns(1);
+
                         break;
+                    }
                     case 2:
+                        s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_normals;
+                        ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
+                        s_renderInput.m_giInput = nullptr;
+                        s_renderInput.m_giInputCompare = nullptr;
+                        break;
+                    case 3:
                         s_renderInput.m_renderMode = ysSceneRenderInput::RenderMode::e_depth;
+                        ImGui::SliderInt("Samples Per Pixel", &s_renderInput.m_samplesPerPixel, 1, 1000);
+                        s_renderInput.m_giInput = nullptr;
+                        s_renderInput.m_giInputCompare = nullptr;
                         break;
                 }
 

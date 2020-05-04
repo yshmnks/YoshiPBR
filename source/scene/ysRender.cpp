@@ -21,7 +21,61 @@ void ysRender::Reset()
 void ysRender::Create(const ysScene* scene, const ysSceneRenderInput& input)
 {
     m_scene = scene;
-    m_input = input;
+
+    {
+        ///////////////////////////////////
+        // Make a DEEP COPY of the input //
+        ///////////////////////////////////
+        m_input = input;
+        m_input.m_giInput = nullptr;
+        m_input.m_giInputCompare = nullptr;
+        switch (input.m_renderMode)
+        {
+            case ysSceneRenderInput::RenderMode::e_compare:
+            {
+                ysAssert(input.m_giInput != nullptr && input.m_giInputCompare != nullptr);
+                switch (input.m_giInputCompare->m_type)
+                {
+                    case ysGlobalIlluminationInput::Type::e_uniDirectional:
+                        ysMemCpy(m_inputsUni + 1, input.m_giInputCompare, sizeof(ysGlobalIlluminationInput_UniDirectional));
+                        m_input.m_giInputCompare = m_inputsUni + 1;
+                        break;
+                    case ysGlobalIlluminationInput::Type::e_biDirectional:
+                        ysMemCpy(m_inputsBi + 1, input.m_giInputCompare, sizeof(ysGlobalIlluminationInput_BiDirectional));
+                        m_input.m_giInputCompare = m_inputsBi + 1;
+                        break;
+                    default:
+                        ysAssert(false);
+                        break;
+                }
+                // Yes, there is no break here. We still need to copy the base GI input.
+            }
+            case ysSceneRenderInput::RenderMode::e_regular:
+            {
+                ysAssert(input.m_renderMode == ysSceneRenderInput::RenderMode::e_compare || input.m_giInputCompare == nullptr);
+                switch (input.m_giInput->m_type)
+                {
+                    case ysGlobalIlluminationInput::Type::e_uniDirectional:
+                        ysMemCpy(m_inputsUni + 0, input.m_giInput, sizeof(ysGlobalIlluminationInput_UniDirectional));
+                        m_input.m_giInput = m_inputsUni + 0;
+                        break;
+                    case ysGlobalIlluminationInput::Type::e_biDirectional:
+                        ysMemCpy(m_inputsBi + 0, input.m_giInput, sizeof(ysGlobalIlluminationInput_BiDirectional));
+                        m_input.m_giInput = m_inputsBi + 0;
+                        break;
+                    default:
+                        ysAssert(false);
+                        break;
+                }
+                break;
+            }
+            default:
+            {
+                ysAssert(input.m_giInput == nullptr && input.m_giInputCompare == nullptr);
+                break;
+            }
+        }
+    }
 
     m_pixelCount = input.m_pixelCountX * input.m_pixelCountY;
     m_pixels = static_cast<Pixel*>(ysMalloc(sizeof(Pixel) * m_pixelCount));
@@ -109,15 +163,7 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
     switch (m_input.m_renderMode)
     {
         case ysSceneRenderInput::RenderMode::e_regular:
-        {
-            for (ys_int32 i = 0; i < m_pixelCount; ++i)
-            {
-                outPixels[i].r = m_pixels[i].m_value.x;
-                outPixels[i].g = m_pixels[i].m_value.y;
-                outPixels[i].b = m_pixels[i].m_value.z;
-            }
-            break;
-        }
+        case ysSceneRenderInput::RenderMode::e_compare:
         case ysSceneRenderInput::RenderMode::e_normals:
         {
             for (ys_int32 i = 0; i < m_pixelCount; ++i)
@@ -164,6 +210,11 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
                     outPixel->b = normalizedDepth;
                 }
             }
+            break;
+        }
+        default:
+        {
+            ysAssert(false);
             break;
         }
     }
