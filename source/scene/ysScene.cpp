@@ -314,12 +314,12 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
             ysVec4 w10_LS1;
             ysDirectionalProbabilityDensity p = mat1->GenerateRandomDirection(this, &w10_LS1, w12_LS1);
             ysVec4 w10 = ysMul33(R1, w10_LS1);
-
+        
             ysSceneRayCastInput srci;
             srci.m_maxLambda = ys_maxFloat;
             srci.m_direction = w10;
             srci.m_origin = x1 + w10 * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
-
+        
             ysSceneRayCastOutput srco;
             bool hit = RayCastClosest(&srco, srci);
             if (hit)
@@ -331,13 +331,13 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                 surface0.m_normalWS = srco.m_hitNormal;
                 surface0.m_tangentWS = srco.m_hitTangent;
                 surface0.m_incomingDirectionWS = -w10;
-
+        
                 ysVec4 incomingRadiance = SampleRadiance(surface0, bounceCount + 1, maxBounceCount, sampleLight);
                 ysAssert(ysAllGE3(incomingRadiance, ysVec4_zero));
                 ysVec4 brdf = mat1->EvaluateBRDF(this, w10_LS1, w12_LS1);
                 ysAssert(ysAllGE3(brdf, ysVec4_zero));
                 ysVec4 radiance = brdf * incomingRadiance * ysSplat(p.m_probabilityPerProjectedSolidAngleInv);
-
+        
                 ys_float32 weight = 1.0f;
                 if (sampleLight)
                 {
@@ -346,12 +346,12 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                     for (ys_int32 i = 0; i < m_emissiveShapeCount; ++i)
                     {
                         const ysShape* emissiveShape = m_shapes + m_emissiveShapeIndices[i];
-
+        
                         ysRayCastInput rci;
                         rci.m_maxLambda = ys_maxFloat;
                         rci.m_direction = w10;
                         rci.m_origin = x1;
-
+        
                         ysRayCastOutput rco;
                         bool samplingTechniquesOverlap = emissiveShape->RayCast(this, &rco, rci);
                         if (samplingTechniquesOverlap)
@@ -369,11 +369,11 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                     }
                     weight = numerator * ysSafeReciprocal(denominator);
                 }
-
+        
                 surfaceLitRadiance += ysSplat(weight) * radiance;
             }
         }
-
+        
         if (sampleLight)
         {
             // Sample each emissive shape
@@ -430,10 +430,10 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                 srci.m_maxLambda = 1.0f;
                 srci.m_direction = v10;
                 srci.m_origin = x1 + w10 * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
-
+                
                 ysSceneRayCastOutput srco;
                 bool hit = RayCastClosest(&srco, srci);
-
+                
                 ysSurfaceData surface0;
                 if (hit)
                 {
@@ -477,12 +477,12 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                         {
                             continue;
                         }
-
+                
                         ysRayCastInput rci;
                         rci.m_maxLambda = ys_maxFloat;
                         rci.m_direction = w10;
                         rci.m_origin = x1;
-
+                
                         ysRayCastOutput rco;
                         bool samplingTechniquesOverlap = emissiveShape->RayCast(this, &rco, rci);
                         if (samplingTechniquesOverlap)
@@ -498,10 +498,10 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                             }
                         }
                     }
-
+                
                     ysDirectionalProbabilityDensity p = mat1->ProbabilityDensityForGeneratedIncomingDirection(this, w10_LS1, w12_LS1);
                     denominator += p.m_probabilityPerSolidAngle * p.m_probabilityPerSolidAngle;
-
+                
                     weight = numerator / denominator;
                 }
 
@@ -1154,7 +1154,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
     {
         ys_int32 rrBeginL = ysMax(0, subpaths.m_russianRouletteBeginL - 1);
         ys_int32 rrBeginE = ysMax(0, subpaths.m_russianRouletteBeginE - 1);
-
+    
         {
             ys_int32 idx = 0;
             for (ys_int32 i = 0; i < (t == 0 ? s - 1 : s); ++i, ++idx)
@@ -1172,7 +1172,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngle *= q;
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
-
+    
             for (ys_int32 i = t - 1; i > 0; --i, ++idx)
             {
                 if (idx < rrBeginL)
@@ -1189,7 +1189,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[0].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
         }
-
+    
         {
             ys_int32 idx = 0;
             for (ys_int32 i = 0; i < (s == 0 ? t - 1 : t); ++i, ++idx)
@@ -1207,7 +1207,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngle *= q;
                 pv->m_probProj[1].m_probabilityPerProjectedSolidAngleInv *= qInv;
             }
-
+    
             for (ys_int32 i = s - 1; i > 0; --i, ++idx)
             {
                 if (idx < rrBeginE)
@@ -1294,7 +1294,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysAssert(s >= 0 && t >= 0 && s + t >= 2);
 
         // pRatioL[i] = P[i-1] / P[i] ... where P[n] is the full path probability assuming y[n] is the last vertex on the light subpath.
-        ys_float32 pRatioL[GenerateSubpathOutput::s_nLCeil] = { -1.0f };
+        ys_float32 pRatioL[GenerateSubpathOutput::s_nLCeil];
         if (s > 1)
         {
             pRatioL[0] = (y[1].m_probProj[0].m_probabilityPerProjectedSolidAngle * y[0].m_projToArea1) / probArea_L0;
@@ -1320,7 +1320,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             pRatioL[0] = (z[t - 1].m_probProj[1].m_probabilityPerProjectedSolidAngle * z[t - 1].m_projToArea1) / probArea_L0;
         }
 
-        ys_float32 pRatioE[GenerateSubpathOutput::s_nECeil] = { -1.0f };
+        ys_float32 pRatioE[GenerateSubpathOutput::s_nECeil];
         if (t > 1)
         {
             //pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
@@ -1357,7 +1357,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             pRatio = 1.0f;
             for (ys_int32 i = t - 1; i > -1; --i)
             {
-                pRatio *= pRatioL[i];
+                pRatio *= pRatioE[i];
                 weightInv += (pRatio * pRatio);
             }
         }
