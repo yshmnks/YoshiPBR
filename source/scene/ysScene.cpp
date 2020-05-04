@@ -1678,7 +1678,16 @@ ysVec4 ysScene::DebugRenderPixel(const ysSceneRenderInput& input, ys_float32 pix
         }
         pixelValueB *= ysSplat(samplesPerPixelCompareInv);
 
-        ysVec4 pixelValue = pixelValueB - pixelValueA;
+        ysVec4 diff = (pixelValueB - pixelValueA);
+        ysVec4 avgInv;
+        {
+            ysVec4 avg = (pixelValueB - pixelValueA) * ysVec4_half;
+            avgInv.x = ysSafeReciprocal(avg.x);
+            avgInv.y = ysSafeReciprocal(avg.y);
+            avgInv.z = ysSafeReciprocal(avg.z);
+            avgInv.w = ysSafeReciprocal(avg.w);
+        }
+        ysVec4 pixelValue = diff * avgInv;
         return pixelValue;
     }
     else
