@@ -132,7 +132,7 @@ bool ysTriangle::GenerateRandomVisibleSurfacePoint(ysSurfacePoint* point, ys_flo
     point->m_point = m_v[0] + ysSplat(a) * u + ysSplat(b) * v;
     *probabilityDensity = 2.0f / ysLength3(ysCross(u, v));
 
-    ysVec4 toVantage = vantagePoint - m_v[0];
+    ysVec4 toVantage = vantagePoint - point->m_point;
     if (ysIsSafeToNormalize3(toVantage))
     {
         toVantage = ysNormalize3(toVantage);
@@ -179,7 +179,7 @@ bool ysTriangle::GenerateRandomVisibleSurfacePoint(ysSurfacePoint* point, ys_flo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ys_float32 ysTriangle::ProbabilityDensityForGeneratedPoint(const ysVec4& point, const ysVec4& vantagePoint) const
 {
-    ysVec4 toVantage = vantagePoint - m_v[0];
+    ysVec4 toVantage = vantagePoint - point;
     if (ysIsSafeToNormalize3(toVantage))
     {
         toVantage = ysNormalize3(toVantage);

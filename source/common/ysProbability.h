@@ -8,9 +8,9 @@ struct ysDirectionalProbabilityDensity
 {
     void SetInvalid()
     {
+        m_probabilityPerSolidAngle = -1.0f;
         m_probabilityPerSolidAngleInv = -1.0f;
-        m_probabilityPerSolidAngleInv = -1.0f;
-        m_probabilityPerProjectedSolidAngleInv = -1.0f;
+        m_probabilityPerProjectedSolidAngle = -1.0f;
         m_probabilityPerProjectedSolidAngleInv = -1.0f;
     }
 

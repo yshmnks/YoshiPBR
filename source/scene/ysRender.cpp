@@ -163,7 +163,6 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
     switch (m_input.m_renderMode)
     {
         case ysSceneRenderInput::RenderMode::e_regular:
-        case ysSceneRenderInput::RenderMode::e_compare:
         case ysSceneRenderInput::RenderMode::e_normals:
         {
             for (ys_int32 i = 0; i < m_pixelCount; ++i)
@@ -171,6 +170,63 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
                 outPixels[i].r = m_pixels[i].m_value.x;
                 outPixels[i].g = m_pixels[i].m_value.y;
                 outPixels[i].b = m_pixels[i].m_value.z;
+            }
+            break;
+        }
+        case ysSceneRenderInput::RenderMode::e_compare:
+        {
+            const ys_int32 kernelHalfWidthX = 8;
+            const ys_int32 kernelHalfWidthY = 8;
+            ys_float32 kernel[1 + 2 * kernelHalfWidthY][1 + 2 * kernelHalfWidthX];
+            {
+                // Just uniformly average the values for now.
+                ys_float32 w = 1.0f / ((1.0f + 2.0f * kernelHalfWidthY) * (1.0f + 2.0f * kernelHalfWidthX));
+                for (ys_int32 yIdx = -kernelHalfWidthY; yIdx <= kernelHalfWidthY; ++yIdx)
+                {
+                    ys_int32 i = yIdx + kernelHalfWidthY;
+                    for (ys_int32 xIdx = -kernelHalfWidthX; xIdx <= kernelHalfWidthX; ++xIdx)
+                    {
+                        ys_int32 j = xIdx + kernelHalfWidthX;
+                        kernel[i][j] = w;
+                    }
+                }
+            }
+
+            for (ys_int32 yDst = 0; yDst < m_input.m_pixelCountY; ++yDst)
+            {
+                for (ys_int32 xDst = 0; xDst < m_input.m_pixelCountX; ++xDst)
+                {
+                    ys_int32 pixelIdx = m_input.m_pixelCountX * yDst + xDst;
+
+                    if (yDst < kernelHalfWidthY || m_input.m_pixelCountY - yDst <= kernelHalfWidthY ||
+                        xDst < kernelHalfWidthX || m_input.m_pixelCountX - xDst <= kernelHalfWidthX)
+                    {
+                        outPixels[pixelIdx].r = m_pixels[pixelIdx].m_value.x + 0.5f;
+                        outPixels[pixelIdx].g = m_pixels[pixelIdx].m_value.y + 0.5f;
+                        outPixels[pixelIdx].b = m_pixels[pixelIdx].m_value.z + 0.5f;
+                        continue;
+                    }
+
+                    ysVec4 p = ysVec4_zero;
+                    for (ys_int32 dy = -kernelHalfWidthY; dy <= kernelHalfWidthY; ++dy)
+                    {
+                        ys_int32 iKernel = dy + kernelHalfWidthY;
+                        ys_int32 ySrc = yDst + dy;
+                        for (ys_int32 dx = -kernelHalfWidthX; dx <= kernelHalfWidthX; ++dx)
+                        {
+                            ys_int32 jKernel = dx + kernelHalfWidthX;
+                            ys_int32 xSrc = xDst + dx;
+
+                            ys_float32 w = kernel[iKernel][jKernel];
+                            ysVec4 pSrc = m_pixels[m_input.m_pixelCountX * ySrc + xSrc].m_value;
+                            p += ysSplat(w) * pSrc;
+                        }
+                    }
+
+                    outPixels[pixelIdx].r = p.x + 0.5f;
+                    outPixels[pixelIdx].g = p.y + 0.5f;
+                    outPixels[pixelIdx].b = p.z + 0.5f;
+                }
             }
             break;
         }
