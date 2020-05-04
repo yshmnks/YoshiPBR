@@ -1420,18 +1420,22 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
                 const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
                 const ysMaterial* material = m_materials + shape->m_materialId.m_index;
 
-                ysSurfaceData surfaceData;
-                surfaceData.m_shape = shape;
-                surfaceData.m_material = material;
-                surfaceData.m_posWS = rco.m_hitPoint;
-                surfaceData.m_normalWS = rco.m_hitNormal;
-                surfaceData.m_tangentWS = rco.m_hitTangent;
-                surfaceData.m_incomingDirectionWS = -pixelDirWS;
-
-                switch (input.m_giMethod)
+                ysAssert(input.m_giInput != nullptr);
+                switch (input.m_giInput->m_type)
                 {
-                    case ysSceneRenderInput::GlobalIlluminationMethod::e_uniDirectional:
+                    case ysGlobalIlluminationInput::Type::e_uniDirectional:
                     {
+                        const ysGlobalIlluminationInput_UniDirectional* giInput
+                            = static_cast<const ysGlobalIlluminationInput_UniDirectional*>(input.m_giInput);
+
+                        ysSurfaceData surfaceData;
+                        surfaceData.m_shape = shape;
+                        surfaceData.m_material = material;
+                        surfaceData.m_posWS = rco.m_hitPoint;
+                        surfaceData.m_normalWS = rco.m_hitNormal;
+                        surfaceData.m_tangentWS = rco.m_hitTangent;
+                        surfaceData.m_incomingDirectionWS = -pixelDirWS;
+
                         // To be precise, what we should actually accumulate here is...
                         //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel
                         // ... where dP/dwproj is the probability per projected solid angle of sampling this point on the pixel
@@ -1439,16 +1443,19 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
                         // Now for our specific implementation, we sample uniformly across the pixel's area such that dP/dwproj = wproj_pixel
                         // (here we have assumed that the pixel subtends an infinitesimal solid angle)
                         // Therefore, we merely need to accumulate radiance += SampleRadiance
-                        radiance += SampleRadiance(surfaceData, 0, input.m_maxBounceCount, input.m_sampleLight);
+                        radiance += SampleRadiance(surfaceData, 0, giInput->m_maxBounceCount, giInput->m_sampleLight);
                         break;
                     }
-                    case ysSceneRenderInput::GlobalIlluminationMethod::e_biDirectional:
+                    case ysGlobalIlluminationInput::Type::e_biDirectional:
                     {
+                        const ysGlobalIlluminationInput_BiDirectional* giInput
+                            = static_cast<const ysGlobalIlluminationInput_BiDirectional*>(input.m_giInput);
+
                         GenerateSubpathInput args;
-                        args.minLightPathVertexCount = ysMin(1, input.m_maxLightSubpathVertexCount);
-                        args.maxLightPathVertexCount = input.m_maxLightSubpathVertexCount;
+                        args.minLightPathVertexCount = ysMin(1, giInput->m_maxLightSubpathVertexCount);
+                        args.maxLightPathVertexCount = giInput->m_maxLightSubpathVertexCount;
                         args.minEyePathVertexCount = 2;
-                        args.maxEyePathVertexCount = ysMax(2, input.m_maxEyeSubpathVertexCount);
+                        args.maxEyePathVertexCount = ysMax(2, giInput->m_maxEyeSubpathVertexCount);
 
                         args.eyePathVertex0.m_shape = nullptr;
                         args.eyePathVertex0.m_material = nullptr;
@@ -1479,6 +1486,13 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
             pixelValue = radiance;
             break;
         }
+        case ysSceneRenderInput::RenderMode::e_compare:
+        {
+            // Comparing GI methods is a bit of an outlier since we allow different samples per pixel for the two methods being compared.
+            // This function should be called with RenderMode::e_regular and the comparison performed by the caller.
+            ysAssert(false);
+            break;
+        }
         case ysSceneRenderInput::RenderMode::e_normals:
         {
             ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
@@ -1507,6 +1521,16 @@ void ysScene::DoRenderWork(ysRender* target) const
     }
     ys_float32 samplesPerPixelInv = 1.0f / (ys_float32)input.m_samplesPerPixel;
 
+    ys_float32 samplesPerPixelCompareInv = 0.0f;
+    if (input.m_renderMode == ysSceneRenderInput::RenderMode::e_compare && input.m_samplesPerPixelCompare <= 0)
+    {
+        return;
+    }
+    else
+    {
+        samplesPerPixelCompareInv = 1.0f / (ys_float32)input.m_samplesPerPixelCompare;
+    }
+
     const ys_float32 aspectRatio = ys_float32(input.m_pixelCountX) / ys_float32(input.m_pixelCountY);
     // These are one-sided heights and widths
     const ys_float32 height = tanf(input.m_fovY);
@@ -1528,17 +1552,53 @@ void ysScene::DoRenderWork(ysRender* target) const
                 ysScopedLock(&target->m_interruptLock);
 
                 ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
-                pixel->m_value = ysVec4_zero;
 
-                for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
+                if (input.m_renderMode == ysSceneRenderInput::RenderMode::e_compare)
                 {
-                    ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
-                    ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
-                    ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
-                    ysVec4 deltaValue = RenderPixel(input, pixelDirLS);
-                    pixel->m_value += deltaValue;
+                    ysSceneRenderInput tmpInput = input;
+                    tmpInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
+
+                    ysVec4 pixelValueA = ysVec4_zero;
+                    for (ys_int32 sampleIdx = 0; sampleIdx < tmpInput.m_samplesPerPixel; ++sampleIdx)
+                    {
+                        ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+                        ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+                        ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+                        ysVec4 deltaValue = RenderPixel(tmpInput, pixelDirLS);
+                        pixelValueA += deltaValue;
+                    }
+                    pixelValueA *= ysSplat(samplesPerPixelInv);
+
+                    ysSwap(tmpInput.m_giInput, tmpInput.m_giInputCompare);
+                    ysSwap(tmpInput.m_samplesPerPixel, tmpInput.m_samplesPerPixelCompare);
+
+                    ysVec4 pixelValueB = ysVec4_zero;
+                    for (ys_int32 sampleIdx = 0; sampleIdx < tmpInput.m_samplesPerPixel; ++sampleIdx)
+                    {
+                        ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+                        ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+                        ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+                        ysVec4 deltaValue = RenderPixel(tmpInput, pixelDirLS);
+                        pixelValueB += deltaValue;
+                    }
+                    pixelValueB *= ysSplat(samplesPerPixelCompareInv);
+
+                    pixel->m_value = pixelValueB - pixelValueA;
                 }
-                pixel->m_value *= ysSplat(samplesPerPixelInv);
+                else
+                {
+                    pixel->m_value = ysVec4_zero;
+                    for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
+                    {
+                        ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+                        ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+                        ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+                        ysVec4 deltaValue = RenderPixel(input, pixelDirLS);
+                        pixel->m_value += deltaValue;
+                    }
+                    pixel->m_value *= ysSplat(samplesPerPixelInv);
+                }
+
                 pixel->m_isNull = false;
             }
 
@@ -1568,27 +1628,73 @@ ysVec4 ysScene::DebugRenderPixel(const ysSceneRenderInput& input, ys_float32 pix
     }
     ys_float32 samplesPerPixelInv = 1.0f / (ys_float32)input.m_samplesPerPixel;
 
+    ys_float32 samplesPerPixelCompareInv = 0.0f;
+    if (input.m_renderMode == ysSceneRenderInput::RenderMode::e_compare && input.m_samplesPerPixelCompare <= 0)
+    {
+        return ysVec4_zero;
+    }
+    else
+    {
+        samplesPerPixelCompareInv = 1.0f / (ys_float32)input.m_samplesPerPixelCompare;
+    }
+
     const ys_float32 aspectRatio = ys_float32(input.m_pixelCountX) / ys_float32(input.m_pixelCountY);
     const ys_float32 height = tanf(input.m_fovY);
     const ys_float32 width = height * aspectRatio;
     const ys_float32 pixelHeight = height / ys_float32(input.m_pixelCountY);
     const ys_float32 pixelWidth = width / ys_float32(input.m_pixelCountX);
-
     ys_float32 yFraction = 1.0f - 2.0f * (pixelY + 1.0f) / ys_float32(input.m_pixelCountY);
     ys_float32 xFraction = 2.0f * (pixelX + 1.0f) / ys_float32(input.m_pixelCountX) - 1.0f;
     ys_float32 yMid = height * yFraction;
     ys_float32 xMid = width * xFraction;
 
-    ysVec4 pixelValue = ysVec4_zero;
-    for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
+    if (input.m_renderMode == ysSceneRenderInput::RenderMode::e_compare)
     {
-        ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
-        ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
-        ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
-        ysVec4 deltaValue = RenderPixel(input, pixelDirLS);
-        pixelValue += deltaValue;
+        ysSceneRenderInput tmpInput = input;
+        tmpInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
+
+        ysVec4 pixelValueA = ysVec4_zero;
+        for (ys_int32 sampleIdx = 0; sampleIdx < tmpInput.m_samplesPerPixel; ++sampleIdx)
+        {
+            ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+            ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+            ysVec4 deltaValue = RenderPixel(tmpInput, pixelDirLS);
+            pixelValueA += deltaValue;
+        }
+        pixelValueA *= ysSplat(samplesPerPixelInv);
+
+        ysSwap(tmpInput.m_giInput, tmpInput.m_giInputCompare);
+        ysSwap(tmpInput.m_samplesPerPixel, tmpInput.m_samplesPerPixelCompare);
+
+        ysVec4 pixelValueB = ysVec4_zero;
+        for (ys_int32 sampleIdx = 0; sampleIdx < tmpInput.m_samplesPerPixel; ++sampleIdx)
+        {
+            ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+            ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+            ysVec4 deltaValue = RenderPixel(tmpInput, pixelDirLS);
+            pixelValueB += deltaValue;
+        }
+        pixelValueB *= ysSplat(samplesPerPixelCompareInv);
+
+        ysVec4 pixelValue = pixelValueB - pixelValueA;
+        return pixelValue;
     }
-    pixelValue *= ysSplat(samplesPerPixelInv);
+    else
+    {
+        ysVec4 pixelValue = ysVec4_zero;
+        for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
+        {
+            ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+            ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+            ysVec4 deltaValue = RenderPixel(input, pixelDirLS);
+            pixelValue += deltaValue;
+        }
+        pixelValue *= ysSplat(samplesPerPixelInv);
+        return pixelValue;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
