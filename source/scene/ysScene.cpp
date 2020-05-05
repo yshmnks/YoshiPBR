@@ -356,11 +356,11 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                         bool samplingTechniquesOverlap = emissiveShape->RayCast(this, &rco, rci);
                         if (samplingTechniquesOverlap)
                         {
-                            ys_float32 pAreaTmp = emissiveShape->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint, x1);
+                            ys_float32 pAreaTmp = emissiveShape->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint);
                             ys_float32 rr = rco.m_lambda * rco.m_lambda;
                             ys_float32 c = ysDot3(-w10, rco.m_hitNormal);
                             ysAssert(c >= 0.0f);
-                            if (c > ys_epsilon) // Prevent division by zero
+                            if (c > ys_zeroSafe)
                             {
                                 ys_float32 pAngleTmp = pAreaTmp * rr / c;
                                 denominator += pAngleTmp * pAngleTmp;
@@ -388,11 +388,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                 }
                 ysSurfacePoint frame0;
                 ys_float32 pArea;
-                bool success = shape0->GenerateRandomVisibleSurfacePoint(this, &frame0, &pArea, x1);
-                if (success == false)
-                {
-                    continue;
-                }
+                shape0->GenerateRandomSurfacePoint(this, &frame0, &pArea);
                 ysAssert(pArea > 0.0f);
                 const ysVec4& x0 = frame0.m_point;
                 const ysVec4& n0 = frame0.m_normal;
@@ -407,10 +403,9 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                 ysVec4 w10 = -w01;
                 ysVec4 w10_LS1 = ysMulT33(R1, w10);
                 ys_float32 cos01_0 = ysDot3(w01, n0);
-                ysAssert(cos01_0 > 0.0f);
-                if (cos01_0 < ys_epsilon)
+                if (cos01_0 < ys_zeroSafe)
                 {
-                    // Prevent division by zero
+                    // The point is on a surface facing away
                     continue;
                 }
                 ys_float32 cos10_1 = ysDot3(w10, n1);
@@ -487,7 +482,7 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                         bool samplingTechniquesOverlap = emissiveShape->RayCast(this, &rco, rci);
                         if (samplingTechniquesOverlap)
                         {
-                            ys_float32 pAreaTmp = emissiveShape->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint, x1);
+                            ys_float32 pAreaTmp = emissiveShape->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint);
                             ys_float32 rr = rco.m_lambda * rco.m_lambda;
                             ys_float32 c = ysDot3(w01, rco.m_hitNormal);
                             ysAssert(c >= 0.0f);
@@ -1150,11 +1145,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             return ysVec4_zero;
         }
         const PathVertex* x3 = z + (t - 2);
-        probArea_L0 = x2->m_shape->ProbabilityDensityForGeneratedPoint(this, x2->m_posWS, x3->m_posWS);
-        if (probArea_L0 == 0.0f)
-        {
-            return ysVec4_zero;
-        }
+        probArea_L0 = x2->m_shape->ProbabilityDensityForGeneratedPoint(this, x2->m_posWS);
+        ysAssert(probArea_L0 > ys_zeroSafe);
         probArea_L0 /= (ys_float32)m_emissiveShapeCount;
         probAreaFinite_L0 = true;
         ysMtx44 R2;
@@ -1741,7 +1733,7 @@ void ysScene::DoRenderWork(ysRender* target) const
                     }
                     pixelValueB *= ysSplat(samplesPerPixelCompareInv);
 
-                    pixel->m_value = pixelValueB - pixelValueA;
+                    pixel->m_value = (pixelValueB - pixelValueA) + ysVec4_half;
                 }
                 else
                 {
@@ -1845,7 +1837,7 @@ ysVec4 ysScene::DebugRenderPixel(const ysSceneRenderInput& input, ys_float32 pix
             avgInv.z = ysSafeReciprocal(avg.z);
             avgInv.w = ysSafeReciprocal(avg.w);
         }
-        ysVec4 pixelValue = diff * avgInv;
+        ysVec4 pixelValue = (diff * avgInv) + ysVec4_half;
         return pixelValue;
     }
     else

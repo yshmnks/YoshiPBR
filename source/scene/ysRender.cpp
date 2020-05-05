@@ -201,9 +201,9 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
                     if (yDst < kernelHalfWidthY || m_input.m_pixelCountY - yDst <= kernelHalfWidthY ||
                         xDst < kernelHalfWidthX || m_input.m_pixelCountX - xDst <= kernelHalfWidthX)
                     {
-                        outPixels[pixelIdx].r = m_pixels[pixelIdx].m_value.x + 0.5f;
-                        outPixels[pixelIdx].g = m_pixels[pixelIdx].m_value.y + 0.5f;
-                        outPixels[pixelIdx].b = m_pixels[pixelIdx].m_value.z + 0.5f;
+                        outPixels[pixelIdx].r = m_pixels[pixelIdx].m_value.x;
+                        outPixels[pixelIdx].g = m_pixels[pixelIdx].m_value.y;
+                        outPixels[pixelIdx].b = m_pixels[pixelIdx].m_value.z;
                         continue;
                     }
 
@@ -223,9 +223,9 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
                         }
                     }
 
-                    outPixels[pixelIdx].r = p.x + 0.5f;
-                    outPixels[pixelIdx].g = p.y + 0.5f;
-                    outPixels[pixelIdx].b = p.z + 0.5f;
+                    outPixels[pixelIdx].r = p.x;
+                    outPixels[pixelIdx].g = p.y;
+                    outPixels[pixelIdx].b = p.z;
                 }
             }
             break;
