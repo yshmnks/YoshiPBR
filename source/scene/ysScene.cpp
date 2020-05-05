@@ -1415,6 +1415,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         }
         else if (s == 1)
         {
+            // TODO: Handle non-finite probability densities
             ysAssert(t > 0);
             pRatioL[0] = (z[t - 1].m_probProj[1].m_probabilityPerProjectedSolidAngle * z[t - 1].m_projToArea1) / probArea_L0;
         }
@@ -1489,6 +1490,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         }
         else if (t == 1)
         {
+            // TODO: Handle non-finite probability densities
             ysAssert(s > 0);
             pRatioE[0] = (y[s - 1].m_probProj[1].m_probabilityPerProjectedSolidAngle * y[s - 1].m_projToArea1) / probArea_W0;
         }

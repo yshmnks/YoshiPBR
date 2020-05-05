@@ -532,7 +532,7 @@ static void sCreateScene()
     triangles[10].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf) * ysSplat(h);
     triangles[10].m_vertices[1] = ysVecSet(qwer, -qwer, asdf) * ysSplat(h);
     triangles[10].m_vertices[2] = ysVecSet(qwer, qwer, asdf) * ysSplat(h);
-    triangles[10].m_twoSided = false;
+    triangles[10].m_twoSided = true;
     triangles[10].m_materialType = ysMaterialType::e_standard;
     triangles[10].m_materialTypeIndex = 4;
     triangles[11].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf2) * ysSplat(h);
@@ -546,18 +546,18 @@ static void sCreateScene()
     materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[0].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[0].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
+    materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 0.25f, 0.25f);
     materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[1].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[2].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
+    materialStandards[2].m_albedoDiffuse = ysVecSet(0.25f, 0.25f, 1.0f);
     materialStandards[2].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[2].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[3].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
+    materialStandards[3].m_albedoDiffuse = ysVecSet(0.25f, 1.0f, 0.25f);
     materialStandards[3].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[3].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[4].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[4].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[4].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(4.0f);
+    materialStandards[4].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
     ysLightPointDef lightPoints[1];
     lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.9f) * ysSplat(h);
@@ -565,7 +565,7 @@ static void sCreateScene()
 
     ysSceneDef sceneDef;
     sceneDef.m_triangles = triangles;
-    sceneDef.m_triangleCount = 11;
+    sceneDef.m_triangleCount = 12;
     sceneDef.m_materialStandards = materialStandards;
     sceneDef.m_materialStandardCount = 5;
     sceneDef.m_lightPoints = lightPoints;
