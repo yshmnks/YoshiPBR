@@ -46,10 +46,24 @@ ysDirectionalProbabilityDensity ysMaterialStandard::GenerateRandomDirection(cons
     ys_float32 sinTheta = sqrtf(v);
     *outgoingLS = ysVecSet(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
     ysDirectionalProbabilityDensity p;
-    p.m_probabilityPerSolidAngle = cosTheta / ys_pi;
-    p.m_probabilityPerSolidAngleInv = ysSafeReciprocal(cosTheta) * ys_pi;
+    if (cosTheta < ys_zeroSafe)
+    {
+        p.m_probabilityPerSolidAngle = 0.0f;
+        p.m_probabilityPerSolidAngleInv = 0.0f;
+        p.m_finiteProbabilityPerSolidAngle = true;
+        p.m_finiteProbabilityPerSolidAngleInv = false;
+    }
+    else
+    {
+        p.m_probabilityPerSolidAngle = cosTheta / ys_pi;
+        p.m_probabilityPerSolidAngleInv = ys_pi / cosTheta;
+        p.m_finiteProbabilityPerSolidAngle = true;
+        p.m_finiteProbabilityPerSolidAngleInv = true;
+    }
     p.m_probabilityPerProjectedSolidAngle = 1.0f / ys_pi;
     p.m_probabilityPerProjectedSolidAngleInv = ys_pi;
+    p.m_finiteProbabilityPerProjectedSolidAngle = true;
+    p.m_finiteProbabilityPerProjectedSolidAngleInv = true;
     return p;
 }
 
@@ -71,8 +85,22 @@ ysDirectionalProbabilityDensity ysMaterialStandard::GenerateRandomEmission(ysVec
     ysDirectionalProbabilityDensity p;
     p.m_probabilityPerSolidAngle = 1.0f / ys_2pi;
     p.m_probabilityPerSolidAngleInv = ys_2pi;
-    p.m_probabilityPerProjectedSolidAngle = ysSafeReciprocal(cosTheta) / ys_2pi;
-    p.m_probabilityPerProjectedSolidAngleInv = cosTheta * ys_2pi;
+    p.m_finiteProbabilityPerSolidAngle = true;
+    p.m_finiteProbabilityPerSolidAngleInv = true;
+    if (cosTheta < ys_zeroSafe)
+    {
+        p.m_probabilityPerProjectedSolidAngle = 1.0f;
+        p.m_probabilityPerProjectedSolidAngleInv = 0.0f;
+        p.m_finiteProbabilityPerProjectedSolidAngle = false;
+        p.m_finiteProbabilityPerProjectedSolidAngleInv = true;
+    }
+    else
+    {
+        p.m_probabilityPerProjectedSolidAngle = 1.0f / (cosTheta * ys_2pi);
+        p.m_probabilityPerProjectedSolidAngleInv = cosTheta * ys_2pi;
+        p.m_finiteProbabilityPerProjectedSolidAngle = true;
+        p.m_finiteProbabilityPerProjectedSolidAngleInv = true;
+    }
     return p;
 }
 
@@ -91,10 +119,24 @@ ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGenerat
     ysDirectionalProbabilityDensity p;
     if (outLS.z > 0.0f)
     {
-        p.m_probabilityPerSolidAngle = outLS.z / ys_pi;
-        p.m_probabilityPerSolidAngleInv = ysSafeReciprocal(outLS.z) * ys_pi;
+        if (outLS.z > ys_zeroSafe)
+        {
+            p.m_probabilityPerSolidAngle = outLS.z / ys_pi;
+            p.m_probabilityPerSolidAngleInv = ys_pi / outLS.z;
+            p.m_finiteProbabilityPerSolidAngle = true;
+            p.m_finiteProbabilityPerSolidAngleInv = true;
+        }
+        else
+        {
+            p.m_probabilityPerSolidAngle = 0.0f;
+            p.m_probabilityPerSolidAngleInv = 0.0f;
+            p.m_finiteProbabilityPerSolidAngle = true;
+            p.m_finiteProbabilityPerSolidAngleInv = false;
+        }
         p.m_probabilityPerProjectedSolidAngle = 1.0f / ys_pi;
         p.m_probabilityPerProjectedSolidAngleInv = ys_pi;
+        p.m_finiteProbabilityPerProjectedSolidAngle = true;
+        p.m_finiteProbabilityPerProjectedSolidAngleInv = true;
     }
     else
     {
@@ -102,6 +144,10 @@ ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGenerat
         p.m_probabilityPerSolidAngleInv = 0.0f;
         p.m_probabilityPerProjectedSolidAngle = 0.0f;
         p.m_probabilityPerProjectedSolidAngleInv = 0.0f;
+        p.m_finiteProbabilityPerSolidAngle = true;
+        p.m_finiteProbabilityPerSolidAngleInv = false;
+        p.m_finiteProbabilityPerProjectedSolidAngle = true;
+        p.m_finiteProbabilityPerProjectedSolidAngleInv = false;
     }
     return p;
 }
@@ -115,8 +161,22 @@ ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGenerat
     {
         p.m_probabilityPerSolidAngle = 1.0f / ys_2pi;
         p.m_probabilityPerSolidAngleInv = ys_2pi;
-        p.m_probabilityPerProjectedSolidAngle = ysSafeReciprocal(emittedDirectionLS.z) / ys_2pi;
-        p.m_probabilityPerProjectedSolidAngleInv = emittedDirectionLS.z * ys_2pi;
+        p.m_finiteProbabilityPerSolidAngle = true;
+        p.m_finiteProbabilityPerSolidAngleInv = true;
+        if (emittedDirectionLS.z > ys_zeroSafe)
+        {
+            p.m_probabilityPerProjectedSolidAngle = 1.0f / (emittedDirectionLS.z * ys_2pi);
+            p.m_probabilityPerProjectedSolidAngleInv = emittedDirectionLS.z * ys_2pi;
+            p.m_finiteProbabilityPerProjectedSolidAngle = true;
+            p.m_finiteProbabilityPerProjectedSolidAngleInv = true;
+        }
+        else
+        {
+            p.m_probabilityPerProjectedSolidAngle = 1.0f;
+            p.m_probabilityPerProjectedSolidAngleInv = emittedDirectionLS.z * ys_2pi;
+            p.m_finiteProbabilityPerProjectedSolidAngle = false;
+            p.m_finiteProbabilityPerProjectedSolidAngleInv = true;
+        }
     }
     else
     {
@@ -124,6 +184,10 @@ ysDirectionalProbabilityDensity ysMaterialStandard::ProbabilityDensityForGenerat
         p.m_probabilityPerSolidAngleInv = 0.0f;
         p.m_probabilityPerProjectedSolidAngle = 0.0f;
         p.m_probabilityPerProjectedSolidAngleInv = 0.0f;
+        p.m_finiteProbabilityPerSolidAngle = true;
+        p.m_finiteProbabilityPerSolidAngleInv = false;
+        p.m_finiteProbabilityPerProjectedSolidAngle = true;
+        p.m_finiteProbabilityPerProjectedSolidAngleInv = false;
     }
     return p;
 }

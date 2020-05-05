@@ -103,15 +103,32 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                 ImGui::SliderInt("Depth", &g_settings.m_drawBVHDepth, -1, ysScene_GetBVHDepth(s_sceneId) - 1);
                 ImGui::Separator();
 
+                static bool s_forceResolution = true;
+                static ys_int32 s_resolutionXY[2] = { 100, 100 };
+                ImGui::Checkbox("Force Resolution", &s_forceResolution);
+                if (s_forceResolution)
+                {
+                    ImGui::SameLine();
+                    ImGui::SliderInt2("", s_resolutionXY, 1, 1000);
+                }
+
                 ImGui::Checkbox("Draw Render", &g_settings.m_drawRender);
                 ImGui::SameLine();
                 ImVec2 button_sz = ImVec2(-1, 0);
                 if (ImGui::Button("Render", button_sz))
                 {
+                    ys_int32 xCount = windowWidth;
+                    ys_int32 yCount = windowHeight;
+                    if (s_forceResolution)
+                    {
+                        xCount = s_resolutionXY[0];
+                        yCount = s_resolutionXY[1];
+                    }
+
                     s_renderInput.m_eye = g_camera.ComputeEyeTransform();
                     s_renderInput.m_fovY = g_camera.m_verticalFov;
-                    s_renderInput.m_pixelCountX = windowWidth;
-                    s_renderInput.m_pixelCountY = windowHeight;
+                    s_renderInput.m_pixelCountX = xCount;
+                    s_renderInput.m_pixelCountY = yCount;
 
                     if (s_renderId != ys_nullRenderId)
                     {
@@ -120,12 +137,12 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                     s_renderId = ysScene_CreateRender(s_sceneId, s_renderInput);
                     ysRender_BeginWork(s_renderId);
 
-                    s_pixels.SetCount(windowWidth * windowHeight);
-                    s_pixelCountX = windowWidth;
-                    s_pixelCountY = windowHeight;
+                    s_pixels.SetCount(xCount * yCount);
+                    s_pixelCountX = xCount;
+                    s_pixelCountY = yCount;
                 }
 
-                const char* renderModes[] = { "Global Illumination", "Compare GI Methods (B - A)", "Normals", "Depth"};
+                const char* renderModes[] = { "Global Illumination", "2 * (B - A) / (B + A) + 0.5", "Normals", "Depth"};
                 static int selectedRenderMode = 0;
                 ImGui::Combo("Render Mode", &selectedRenderMode, renderModes, 4);
                 ImGui::Separator();
@@ -180,15 +197,15 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                             case 0:
                             {
                                 s_renderInput.m_giInput = s_uniInput + 0;
-                                ImGui::SliderInt("Bounce Count", &s_uniInput[0].m_maxBounceCount, 0, 100);
-                                ImGui::Checkbox("Sample Light", &s_uniInput[0].m_sampleLight);
+                                ImGui::SliderInt("Bounce Count A", &s_uniInput[0].m_maxBounceCount, 0, 100);
+                                ImGui::Checkbox("Sample Light A", &s_uniInput[0].m_sampleLight);
                                 break;
                             }
                             case 1:
                             {
                                 s_renderInput.m_giInput = s_biInput + 0;
-                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_biInput[0].m_maxLightSubpathVertexCount, 0, 16);
-                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_biInput[0].m_maxEyeSubpathVertexCount, 2, 16);
+                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count A", &s_biInput[0].m_maxLightSubpathVertexCount, 0, 16);
+                                ImGui::SliderInt("Max EYE Subpath Vertex Count A", &s_biInput[0].m_maxEyeSubpathVertexCount, 2, 16);
                                 break;
                             }
                         }
@@ -202,15 +219,15 @@ static void sUpdateUI(ys_int32 windowWidth, ys_int32 windowHeight)
                             case 0:
                             {
                                 s_renderInput.m_giInputCompare = s_uniInput + 1;
-                                ImGui::SliderInt("Bounce Count", &s_uniInput[1].m_maxBounceCount, 0, 100);
-                                ImGui::Checkbox("Sample Light", &s_uniInput[1].m_sampleLight);
+                                ImGui::SliderInt("Bounce Count B", &s_uniInput[1].m_maxBounceCount, 0, 100);
+                                ImGui::Checkbox("Sample Light B", &s_uniInput[1].m_sampleLight);
                                 break;
                             }
                             case 1:
                             {
                                 s_renderInput.m_giInputCompare = s_biInput + 1;
-                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count", &s_biInput[1].m_maxLightSubpathVertexCount, 0, 16);
-                                ImGui::SliderInt("Max EYE Subpath Vertex Count", &s_biInput[1].m_maxEyeSubpathVertexCount, 2, 16);
+                                ImGui::SliderInt("Max LIGHT Subpath Vertex Count B", &s_biInput[1].m_maxLightSubpathVertexCount, 0, 16);
+                                ImGui::SliderInt("Max EYE Subpath Vertex Count B", &s_biInput[1].m_maxEyeSubpathVertexCount, 2, 16);
                                 break;
                             }
                         }

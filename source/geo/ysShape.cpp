@@ -60,24 +60,7 @@ void ysShape::GenerateRandomSurfacePoint(const ysScene* scene, ysSurfacePoint* p
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool ysShape::GenerateRandomVisibleSurfacePoint(const ysScene* scene, ysSurfacePoint* point, ys_float32* probabilityDensity, const ysVec4& vantagePoint) const
-{
-    switch (m_type)
-    {
-        case Type::e_triangle:
-        {
-            const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
-            return triangle.GenerateRandomVisibleSurfacePoint(point, probabilityDensity, vantagePoint);
-        }
-        default:
-            ysAssert(false);
-            return false;
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ys_float32 ysShape::ProbabilityDensityForGeneratedPoint(const ysScene* scene, const ysVec4& point, const ysVec4& vantagePoint) const
+ys_float32 ysShape::ProbabilityDensityForGeneratedPoint(const ysScene* scene, const ysVec4& point) const
 {
     ys_float32 probDens;
     switch (m_type)
@@ -85,7 +68,7 @@ ys_float32 ysShape::ProbabilityDensityForGeneratedPoint(const ysScene* scene, co
         case Type::e_triangle:
         {
             const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
-            probDens = triangle.ProbabilityDensityForGeneratedPoint(point, vantagePoint);
+            probDens = triangle.ProbabilityDensityForGeneratedPoint(point);
             break;
         }
         default:

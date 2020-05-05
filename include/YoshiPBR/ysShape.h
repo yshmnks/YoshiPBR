@@ -28,8 +28,7 @@ struct ysShape
     ysAABB ComputeAABB(const ysScene* scene) const;
     bool RayCast(const ysScene* scene, ysRayCastOutput*, const ysRayCastInput&) const;
     void GenerateRandomSurfacePoint(const ysScene*, ysSurfacePoint* point, ys_float32* probabilityDensity) const;
-    bool GenerateRandomVisibleSurfacePoint(const ysScene*, ysSurfacePoint* point, ys_float32* probabilityDensity, const ysVec4& vantagePoint) const;
-    ys_float32 ProbabilityDensityForGeneratedPoint(const ysScene*, const ysVec4& point, const ysVec4& vantagePoint) const;
+    ys_float32 ProbabilityDensityForGeneratedPoint(const ysScene*, const ysVec4& point) const;
 
     Type m_type;
     ys_int32 m_typeIndex;

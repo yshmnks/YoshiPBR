@@ -41,6 +41,7 @@ typedef double ys_float64;
 
 #define	ys_maxFloat     FLT_MAX
 #define	ys_epsilon      FLT_EPSILON
+#define ys_zeroSafe     FLT_EPSILON // General purpose threshold to prevent division by zero. TODO: How small should we allow this to go?
 #define ys_pi           3.14159265359f
 #define ys_2pi          6.28318530717f
 
