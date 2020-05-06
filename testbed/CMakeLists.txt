@@ -33,6 +33,7 @@ set (TESTBED_RESOURCE_FILES
 add_executable(testbed ${TESTBED_SOURCE_FILES} ${TESTBED_RESOURCE_FILES})
 target_include_directories(testbed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(testbed PUBLIC YoshiPBR glfw glad imgui)
+target_compile_options(testbed PRIVATE -W4 -WX)
 set_target_properties(testbed PROPERTIES
 	CXX_STANDARD 11
     CXX_STANDARD_REQUIRED YES

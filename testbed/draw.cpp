@@ -117,6 +117,7 @@ struct ShaderLoader
             return 0;
         }
         ys_uint32 pos = (ys_uint32)file.tellg();
+        YS_REF(pos);
         file.seekg(0, std::ios::end);
         ys_uint32 len = (ys_uint32)file.tellg();
         file.seekg(std::ios::beg);
@@ -150,7 +151,7 @@ struct ShaderLoader
         ys_uint32 i = 0;
         while (file.good())
         {
-            (*shaderSource)[i] = file.get(); // get character from file.
+            (*shaderSource)[i] = (char)file.get(); // get character from file.
             if (!file.eof())
             {
                 i++;

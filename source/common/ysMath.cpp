@@ -460,7 +460,6 @@ ysMtx44 ysMtxFromTransform(const ysTransform& xf)
     const ys_float32& xx = qq.x;
     const ys_float32& yy = qq.y;
     const ys_float32& zz = qq.z;
-    const ys_float32& ww = qq.w;
     ys_float32 xy = q.x * q.y;
     ys_float32 zw = q.z * q.w;
     ys_float32 xz = q.x * q.z;
