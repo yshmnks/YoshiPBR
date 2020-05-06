@@ -621,6 +621,7 @@ int main(int, char**)
 
     // Load OpenGL functions using glad
     int gladVersion = gladLoadGL();
+    YS_REF(gladVersion);
     printf("OpenGL %s, GLSL %s\n", glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION));
 
     glfwSetScrollCallback(g_mainWindow, sScrollCallback);

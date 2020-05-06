@@ -44,6 +44,7 @@ set(YOSHIPBR_HEADER_FILES
 add_library(YoshiPBR STATIC ${YOSHIPBR_SOURCE_FILES} ${YOSHIPBR_HEADER_FILES})
 target_include_directories(YoshiPBR PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 target_include_directories(YoshiPBR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(YoshiPBR PRIVATE -W4 -WX)
 set_target_properties(YoshiPBR PROPERTIES
     CXX_STANDARD 11
     CXX_STANDARD_REQUIRED YES

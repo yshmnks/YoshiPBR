@@ -647,12 +647,12 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
     ys_int32 nE;
 
     // Probability to generate the first point on the Light. Don't forget to account for random light selection!
-    ys_float32 probArea_L0;
-    bool probArea_L0_finite;
+    ys_float32 probArea_L0 = -1.0f;
+    bool probArea_L0_finite = false;
     ys_float32 probArea_W0 = 1.0f;      // TODO
     bool probArea_W0_finite = false;    // TODO
 
-    ysVec4 LSpatialOverPSpatial0;
+    ysVec4 LSpatialOverPSpatial0 = -ysVec4_zero;
     ysVec4 WSpatialOverPSpatial0 = input.WSpatialOverPSpatial0;
 
     ////////////////////////////////

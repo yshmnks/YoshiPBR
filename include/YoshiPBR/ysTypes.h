@@ -4,6 +4,8 @@
 #include <float.h>
 #include <memory>
 
+#define YS_REF(x) (void)x
+
 #if defined(_DEBUG)
 #define ysDEBUG_BUILD (1)
 #else
