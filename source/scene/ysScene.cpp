@@ -767,7 +767,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             {
                 break;
             }
-            ysAssert(srco.m_lambda > 0.0f);
+            ysAssert(srco.m_lambda >= 0.0f);
             ys_float32 d12 = srco.m_lambda + rayCastNudge;
             ys_float32 d12Sqr = d12 * d12;
             if (d12Sqr < divZeroThresh)
@@ -856,7 +856,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
                 break;
             }
 
-            ysAssert(srco.m_lambda > 0.0f);
+            ysAssert(srco.m_lambda >= 0.0f);
             ys_float32 d12 = srco.m_lambda + rayCastNudge;
             ys_float32 d12Sqr = d12 * d12;
             if (d12Sqr < divZeroThresh)
@@ -982,7 +982,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             break;
         }
 
-        ysAssert(srco.m_lambda > 0.0f);
+        ysAssert(srco.m_lambda >= 0.0f);
         ys_float32 d12 = srco.m_lambda + rayCastNudge;
         ys_float32 d12Sqr = d12 * d12;
         if (d12Sqr < divZeroThresh)
@@ -1152,7 +1152,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysMtx44 R2;
         {
             R2.cx = x2->m_tangentWS;
-            R2.cx = ysCross(x2->m_normalWS, x2->m_tangentWS);
+            R2.cy = ysCross(x2->m_normalWS, x2->m_tangentWS);
             R2.cz = x2->m_normalWS;
         };
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
@@ -1345,7 +1345,17 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ys_float32 pRatioL[GenerateSubpathOutput::s_nLCeil];
         if (s > 1)
         {
-            pRatioL[0] = (y[1].m_probProj[0].m_probabilityPerProjectedSolidAngle * y[0].m_projToArea1) / probArea_L0;
+            if (y[1].m_probProj[0].m_finiteProbabilityPerProjectedSolidAngle == probAreaFinite_L0)
+            {
+                ysAssert(probAreaFinite_L0 || (y[1].m_probProj[0].m_probabilityPerProjectedSolidAngle == 1.0f && probArea_L0 == 1.0f));
+                pRatioL[0] = (y[1].m_probProj[0].m_probabilityPerProjectedSolidAngle * y[0].m_projToArea1) / probArea_L0;
+            }
+            else
+            {
+                ysAssert(probAreaFinite_L0 == false); // How to handle infinite ratio? Is it even possible?
+                pRatioL[0] = 0.0f;
+            }
+
             for (ys_int32 i = 1; i < s - 1; ++i)
             {
                 bool p01Finite = y[i - 1].m_probProj[1].m_finiteProbabilityPerProjectedSolidAngle;
@@ -1401,30 +1411,40 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             }
             else
             {
-                if (p21Finite)
-                {
-                    pRatioL[s - 1] = 0.0f;
-                }
-                else
-                {
-                    // This one confuses me. WHAT DO?!
-                    ysAssert(false);
-                    pRatioL[s - 1] = 0.0f;
-                }
+                ysAssert(p21Finite); // How to handle infinite ratio? Is it even possible?
+                pRatioL[s - 1] = 0.0f;
             }
         }
         else if (s == 1)
         {
-            // TODO: Handle non-finite probability densities
             ysAssert(t > 0);
-            pRatioL[0] = (z[t - 1].m_probProj[1].m_probabilityPerProjectedSolidAngle * z[t - 1].m_projToArea1) / probArea_L0;
+            const PathVertex& zLast = z[t - 1];
+            if (zLast.m_probProj[1].m_finiteProbabilityPerProjectedSolidAngle == probAreaFinite_L0)
+            {
+                ysAssert(probAreaFinite_L0 || (zLast.m_probProj[1].m_probabilityPerProjectedSolidAngle == 1.0f && probArea_L0 == 1.0f));
+                pRatioL[0] = (zLast.m_probProj[1].m_probabilityPerProjectedSolidAngle * zLast.m_projToArea1) / probArea_L0;
+            }
+            else
+            {
+                ysAssert(probAreaFinite_L0 == false); // How to handle infinite ratio? Is it even possible?
+                pRatioL[0] = 0.0f;
+            }
         }
 
         ys_float32 pRatioE[GenerateSubpathOutput::s_nECeil];
         if (t > 1)
         {
-            //pRatioE[0] = (z[1].m_probProj[0] * z[0].m_projToArea1) / probArea_W1;
-            pRatioE[0] = 0.0f; // Because we only support pinhole cameras not modeled as part of the scene at the moment
+            if (z[1].m_probProj[0].m_finiteProbabilityPerProjectedSolidAngle == probAreaFinite_W0)
+            {
+                ysAssert(probAreaFinite_W0 || (z[1].m_probProj[0].m_probabilityPerProjectedSolidAngle == 1.0f && probArea_W0 == 1.0f));
+                pRatioE[0] = (z[1].m_probProj[0].m_probabilityPerProjectedSolidAngle * z[0].m_projToArea1) / probArea_W0;
+            }
+            else
+            {
+                ysAssert(probAreaFinite_W0 == false);
+                pRatioE[0] = 0.0f;
+            }
+
             for (ys_int32 i = 1; i < t - 1; ++i)
             {
                 bool p01Finite = z[i - 1].m_probProj[1].m_finiteProbabilityPerProjectedSolidAngle;
@@ -1433,17 +1453,16 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 ysAssert(p21Finite || z[i + 1].m_probProj[0].m_probabilityPerProjectedSolidAngle == 1.0f);
                 if (p01Finite == false && p21Finite == false)
                 {
-                    pRatioL[i] = 1.0f;
+                    pRatioE[i] = 1.0f;
                 }
                 else if (p01Finite == false && p21Finite == true)
                 {
-                    pRatioL[i] = 0.0f;
+                    pRatioE[i] = 0.0f;
                 }
                 else if (p01Finite == true && p21Finite == false)
                 {
-                    // This one confuses me. WHAT DO?!
                     ysAssert(false);
-                    pRatioL[i] = 0.0f;
+                    pRatioE[i] = 0.0f;
                 }
                 else
                 {
@@ -1476,23 +1495,24 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             }
             else
             {
-                if (p21Finite)
-                {
-                    pRatioE[t - 1] = 0.0f;
-                }
-                else
-                {
-                    // This one confuses me. WHAT DO?!
-                    ysAssert(false);
-                    pRatioE[t - 1] = 0.0f;
-                }
+                ysAssert(p21Finite);
+                pRatioE[t - 1] = 0.0f;
             }
         }
         else if (t == 1)
         {
-            // TODO: Handle non-finite probability densities
             ysAssert(s > 0);
-            pRatioE[0] = (y[s - 1].m_probProj[1].m_probabilityPerProjectedSolidAngle * y[s - 1].m_projToArea1) / probArea_W0;
+            const PathVertex& yLast = y[s - 1];
+            if (yLast.m_probProj[1].m_finiteProbabilityPerProjectedSolidAngle == probAreaFinite_W0)
+            {
+                ysAssert(probAreaFinite_W0 || (yLast.m_probProj[1].m_probabilityPerProjectedSolidAngle == 1.0f && probArea_W0 == 1.0f));
+                pRatioE[0] = (yLast.m_probProj[1].m_probabilityPerProjectedSolidAngle * yLast.m_projToArea1) / probArea_W0;
+            }
+            else
+            {
+                ysAssert(probAreaFinite_W0 == false);
+                pRatioE[0] = 0.0f;
+            }
         }
 
         ys_float32 weightInv;
