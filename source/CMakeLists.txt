@@ -4,6 +4,8 @@ set(YOSHIPBR_SOURCE_FILES
     common/ysMath.cpp
     common/ysProbability.cpp
     common/ysProbability.h
+    common/ysRadiometry.cpp
+    common/ysRadiometry.h
 	common/ysStructures.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp
