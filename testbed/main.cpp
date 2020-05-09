@@ -526,6 +526,12 @@ static void sCreateScene()
     triangles[2 * 4 + 0].m_materialTypeIndex = 3;
     triangles[2 * 4 + 1].m_materialTypeIndex = 3;
 
+    // Make the ceiling a mirror
+    triangles[2 * 0 + 0].m_materialType = ysMaterialType::e_mirror;
+    triangles[2 * 0 + 1].m_materialType = ysMaterialType::e_mirror;
+    triangles[2 * 0 + 0].m_materialTypeIndex = 0;
+    triangles[2 * 0 + 1].m_materialTypeIndex = 0;
+
     const ys_float32 asdf = 0.8f;
     const ys_float32 qwer = 0.5f;
     const ys_float32 asdf2 = -0.8f;
@@ -559,6 +565,8 @@ static void sCreateScene()
     materialStandards[4].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[4].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
+    ysMaterialMirrorDef materialMirrors[1];
+
     ysLightPointDef lightPoints[1];
     lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.9f) * ysSplat(h);
     lightPoints[0].m_wattage = ysSplat(100.0f);
@@ -568,6 +576,8 @@ static void sCreateScene()
     sceneDef.m_triangleCount = 12;
     sceneDef.m_materialStandards = materialStandards;
     sceneDef.m_materialStandardCount = 5;
+    sceneDef.m_materialMirrors = materialMirrors;
+    sceneDef.m_materialMirrorCount = 1;
     sceneDef.m_lightPoints = lightPoints;
     sceneDef.m_lightPointCount = 0;
 

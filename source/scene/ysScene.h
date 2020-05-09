@@ -12,6 +12,7 @@ struct ysDrawInputGeo;
 struct ysLight;
 struct ysLightPoint;
 struct ysMaterial;
+struct ysMaterialMirror;
 struct ysMaterialStandard;
 struct ysRayCastInput;
 struct ysRayCastOutput;
@@ -68,6 +69,9 @@ struct ysScene
 
     ysMaterialStandard* m_materialStandards;
     ys_int32 m_materialStandardCount;
+
+    ysMaterialMirror* m_materialMirrors;
+    ys_int32 m_materialMirrorCount;
 
     ysLight* m_lights;
     ys_int32 m_lightCount;
