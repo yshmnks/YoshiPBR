@@ -1,4 +1,5 @@
 #include "ysMaterial.h"
+#include "ysMaterialMirror.h"
 #include "ysMaterialStandard.h"
 #include "scene/ysScene.h"
 
@@ -12,6 +13,12 @@ ysBSDF ysMaterial::EvaluateBRDF(const ysScene* scene, const ysVec4& incomingDire
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            f = subMat.EvaluateBRDF(incomingDirectionLS, outgoingDirectionLS);
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
             f = subMat.EvaluateBRDF(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
@@ -39,6 +46,12 @@ ysRadiance ysMaterial::EvaluateEmittedRadiance(const ysScene* scene, const ysVec
             L = subMat.EvaluateEmittedRadiance(direction);
             break;
         }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            L = subMat.EvaluateEmittedRadiance(direction);
+            break;
+        }
         default:
         {
             ysAssert(false);
@@ -60,6 +73,12 @@ ysIrradiance ysMaterial::EvaluateEmittedIrradiance(const ysScene* scene) const
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            E = subMat.EvaluateEmittedIrradiance();
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
             E = subMat.EvaluateEmittedIrradiance();
             break;
         }
@@ -88,9 +107,16 @@ bool ysMaterial::IsEmissive(const ysScene* scene) const
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
             return subMat.IsEmissive();
         }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            return subMat.IsEmissive();
+        }
         default:
+        {
             ysAssert(false);
             return false;
+        }
     }
 }
 
@@ -105,6 +131,12 @@ ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScen
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            p = subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, f);
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
             p = subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, f);
             break;
         }
@@ -136,6 +168,12 @@ ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScen
             p = subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, f);
             break;
         }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            p = subMat.GenerateRandomDirection(incomingDirectionLS, outgoingDirectionLS, f);
+            break;
+        }
         default:
         {
             ysAssert(false);
@@ -152,6 +190,77 @@ ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScen
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScene* scene,
+    const ysVec4& w_i, ysVec4* w_o, ysBSDF* f, ysDirectionalProbabilityDensity* pReverse) const
+{
+    ysDirectionalProbabilityDensity p;
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            p = subMat.GenerateRandomDirection(w_i, w_o, f, pReverse);
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            p = subMat.GenerateRandomDirection(w_i, w_o, f, pReverse);
+            break;
+        }
+        default:
+        {
+            ysAssert(false);
+            p.SetInvalid();
+            f->SetInvalid();
+            pReverse->SetInvalid();
+            break;
+        }
+    }
+    ysAssert(p.IsValid() && f->IsValid() && pReverse->IsValid());
+    ysAssert(p.m_perProjectedSolidAngle.m_isFinite == f->m_isFinite);
+    ysAssert(ysIsApproximatelyNormalized3(*w_o));
+    return p;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysDirectionalProbabilityDensity ysMaterial::GenerateRandomDirection(const ysScene* scene,
+    ysVec4* w_i, const ysVec4& w_o, ysBSDF* f, ysDirectionalProbabilityDensity* pReverse) const
+{
+    ysDirectionalProbabilityDensity p;
+    switch (m_type)
+    {
+        case Type::e_standard:
+        {
+            const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            p = subMat.GenerateRandomDirection(w_i, w_o, f, pReverse);
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            p = subMat.GenerateRandomDirection(w_i, w_o, f, pReverse);
+            break;
+        }
+        default:
+        {
+            ysAssert(false);
+            p.SetInvalid();
+            f->SetInvalid();
+            pReverse->SetInvalid();
+            break;
+        }
+    }
+    ysAssert(p.IsValid() && f->IsValid() && pReverse->IsValid());
+    ysAssert(p.m_perProjectedSolidAngle.m_isFinite == f->m_isFinite);
+    ysAssert(ysIsApproximatelyNormalized3(*w_i));
+    return p;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ysDirectionalProbabilityDensity ysMaterial::GenerateRandomEmission(const ysScene* scene, ysVec4* emittedDirectionLS, ysRadiance* L) const
 {
     ysDirectionalProbabilityDensity p;
@@ -160,6 +269,12 @@ ysDirectionalProbabilityDensity ysMaterial::GenerateRandomEmission(const ysScene
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            p = subMat.GenerateRandomEmission(emittedDirectionLS, L);
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
             p = subMat.GenerateRandomEmission(emittedDirectionLS, L);
             break;
         }
@@ -190,6 +305,12 @@ ysDirectionalProbabilityDensity ysMaterial::ProbabilityDensityForGeneratedIncomi
             p = subMat.ProbabilityDensityForGeneratedIncomingDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            p = subMat.ProbabilityDensityForGeneratedIncomingDirection(incomingDirectionLS, outgoingDirectionLS);
+            break;
+        }
         default:
         {
             ysAssert(false);
@@ -215,6 +336,12 @@ ysDirectionalProbabilityDensity ysMaterial::ProbabilityDensityForGeneratedOutgoi
             p = subMat.ProbabilityDensityForGeneratedOutgoingDirection(incomingDirectionLS, outgoingDirectionLS);
             break;
         }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
+            p = subMat.ProbabilityDensityForGeneratedOutgoingDirection(incomingDirectionLS, outgoingDirectionLS);
+            break;
+        }
         default:
         {
             ysAssert(false);
@@ -236,6 +363,12 @@ ysDirectionalProbabilityDensity ysMaterial::ProbabilityDensityForGeneratedEmissi
         case Type::e_standard:
         {
             const ysMaterialStandard& subMat = scene->m_materialStandards[m_typeIndex];
+            p = subMat.ProbabilityDensityForGeneratedEmission(emittedDirectionLS);
+            break;
+        }
+        case Type::e_mirror:
+        {
+            const ysMaterialMirror& subMat = scene->m_materialMirrors[m_typeIndex];
             p = subMat.ProbabilityDensityForGeneratedEmission(emittedDirectionLS);
             break;
         }
