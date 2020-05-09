@@ -526,11 +526,14 @@ static void sCreateScene()
     triangles[2 * 4 + 0].m_materialTypeIndex = 3;
     triangles[2 * 4 + 1].m_materialTypeIndex = 3;
 
-    // Make the ceiling a mirror
-    triangles[2 * 0 + 0].m_materialType = ysMaterialType::e_mirror;
-    triangles[2 * 0 + 1].m_materialType = ysMaterialType::e_mirror;
-    triangles[2 * 0 + 0].m_materialTypeIndex = 0;
-    triangles[2 * 0 + 1].m_materialTypeIndex = 0;
+    // Make some triangles mirrors
+    {
+        triangles[2 * 0 + 0].m_materialType = ysMaterialType::e_mirror;
+        triangles[2 * 0 + 0].m_materialTypeIndex = 0;
+
+        triangles[2 * 1 + 0].m_materialType = ysMaterialType::e_mirror;
+        triangles[2 * 1 + 0].m_materialTypeIndex = 0;
+    }
 
     const ys_float32 asdf = 0.8f;
     const ys_float32 qwer = 0.5f;
