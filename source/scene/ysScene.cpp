@@ -3,6 +3,7 @@
 #include "light/ysLight.h"
 #include "light/ysLightPoint.h"
 #include "mat/ysMaterial.h"
+#include "mat/ysMaterialMirror.h"
 #include "mat/ysMaterialStandard.h"
 #include "YoshiPBR/ysLock.h"
 #include "YoshiPBR/ysRay.h"
@@ -21,6 +22,7 @@ void ysScene::Reset()
     m_triangles = nullptr;
     m_materials = nullptr;
     m_materialStandards = nullptr;
+    m_materialMirrors = nullptr;
     m_lights = nullptr;
     m_lightPoints = nullptr;
     m_emissiveShapeIndices = nullptr;
@@ -28,6 +30,7 @@ void ysScene::Reset()
     m_triangleCount = 0;
     m_materialCount = 0;
     m_materialStandardCount = 0;
+    m_materialMirrorCount = 0;
     m_lightCount = 0;
     m_lightPointCount = 0;
     m_emissiveShapeCount = 0;
@@ -44,11 +47,14 @@ void ysScene::Create(const ysSceneDef& def)
     m_triangleCount = def.m_triangleCount;
     m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
 
-    m_materialCount = def.m_materialStandardCount;
+    m_materialCount = def.m_materialStandardCount + def.m_materialMirrorCount;
     m_materials = static_cast<ysMaterial*>(ysMalloc(sizeof(ysMaterial) * m_materialCount));
 
     m_materialStandardCount = def.m_materialStandardCount;
     m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
+
+    m_materialMirrorCount = def.m_materialMirrorCount;
+    m_materialMirrors = static_cast<ysMaterialMirror*>(ysMalloc(sizeof(ysMaterialMirror) * m_materialMirrorCount));
 
     m_lightCount = def.m_lightPointCount;
     m_lights = static_cast<ysLight*>(ysMalloc(sizeof(ysLight) * m_lightCount));
@@ -57,6 +63,7 @@ void ysScene::Create(const ysSceneDef& def)
     m_lightPoints = static_cast<ysLightPoint*>(ysMalloc(sizeof(ysLightPoint) * m_lightPointCount));
 
     ys_int32 materialStandardStartIdx = 0;
+    ys_int32 materialMirrorStartIdx = m_materialStandardCount;
 
     ////////////
     // Shapes //
@@ -89,6 +96,9 @@ void ysScene::Create(const ysSceneDef& def)
         {
             case ysMaterialType::e_standard:
                 shape->m_materialId.m_index = materialStandardStartIdx + srcTriangle->m_materialTypeIndex;
+                break;
+            case ysMaterialType::e_mirror:
+                shape->m_materialId.m_index = materialMirrorStartIdx + srcTriangle->m_materialTypeIndex;
                 break;
             default:
                 ysAssert(false);
@@ -124,6 +134,18 @@ void ysScene::Create(const ysSceneDef& def)
 
         ysMaterial* material = m_materials + materialIdx;
         material->m_type = ysMaterial::Type::e_standard;
+        material->m_typeIndex = i;
+    }
+
+    for (ys_int32 i = 0; i < m_materialMirrorCount; ++i, ++materialIdx)
+    {
+        ysMaterialMirror* dst = m_materialMirrors + i;
+        const ysMaterialMirrorDef* src = def.m_materialMirrors + i;
+        YS_REF(dst);
+        YS_REF(src);
+
+        ysMaterial* material = m_materials + materialIdx;
+        material->m_type = ysMaterial::Type::e_mirror;
         material->m_typeIndex = i;
     }
 
@@ -831,7 +853,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
             ysVec4 u12_LS1;
             ysBSDF f012;
-            ysDirectionalProbabilityDensity p012 = y1->m_material->GenerateRandomDirection(this, u10_LS1, &u12_LS1, &f012);
+            ysDirectionalProbabilityDensity p210;
+            ysDirectionalProbabilityDensity p012 = y1->m_material->GenerateRandomDirection(this, u10_LS1, &u12_LS1, &f012, &p210);
             ysAssert(u12_LS1.z >= 0.0f);
             if (u12_LS1.z < divZeroThresh)
             {
@@ -884,7 +907,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
                 break;
             }
 
-            y1->m_probProj[0] = y1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1);
+            y1->m_probProj[0] = p210;
             y1->m_probProj[1] = p012;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
             y1->m_f = f012;
@@ -951,7 +974,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
         ysVec4 u12_LS1;
         ysBSDF f210;
-        ysDirectionalProbabilityDensity p012 = z1->m_material->GenerateRandomDirection(this, &u12_LS1, u10_LS1, &f210);
+        ysDirectionalProbabilityDensity p210;
+        ysDirectionalProbabilityDensity p012 = z1->m_material->GenerateRandomDirection(this, &u12_LS1, u10_LS1, &f210, &p210);
         ysAssert(u12_LS1.z >= 0.0f);
         if (u12_LS1.z < divZeroThresh)
         {
@@ -1004,7 +1028,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             break;
         }
 
-        z1->m_probProj[0] = z1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u12_LS1, u10_LS1);
+        z1->m_probProj[0] = p210;
         z1->m_probProj[1] = p012;
         z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
         z1->m_f = f210;
@@ -1158,6 +1182,14 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             // Joining light and eye subpaths at specular vertices with non-vanishing BSDFs has probability zero. So even if it happens
             // numerically, pretend it ain't so. The theoretical impossibility is reflected by the fact that the estimator diverges if
             // either of the BSDFs at the junction is unbounded.
+            return ysVec4_zero;
+        }
+
+        if (x1->m_probProj[1].m_perProjectedSolidAngle.m_isFinite == false ||
+            x2->m_probProj[1].m_perProjectedSolidAngle.m_isFinite == false ||
+            x1->m_probProj[1].m_perProjectedSolidAngle.m_value < ys_zeroSafe ||
+            x2->m_probProj[1].m_perProjectedSolidAngle.m_value < ys_zeroSafe)
+        {
             return ysVec4_zero;
         }
     }
@@ -1401,12 +1433,14 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
     ys_float32 weight;
     {
         // pA and pB are the per-area-probabilities of generating xA[0] and xB[0]
-        auto ComputeSubpathProbabilityRatios = [](ys_float32* rA,
+        auto ComputeSubpathWeightDenominator = [](ys_float32* denom, bool* denomIsFinite,
             const PathVertex* xA, ys_int32 nA, ys_float32 pA, bool pAIsFinite,
             const PathVertex* xB, ys_int32 nB, ys_float32 pB, bool pBIsFinite)
         {
             if (nA == 0)
             {
+                *denom = 0.0f;
+                *denomIsFinite = true;
                 return;
             }
 
@@ -1415,53 +1449,39 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 const PathVertex& xBLast = xB[nB - 1];
                 if (xBLast.m_probProj[1].m_perProjectedSolidAngle.m_isFinite == pAIsFinite)
                 {
-                    rA[0] = (xBLast.m_probProj[1].m_perProjectedSolidAngle.m_value * xBLast.m_projToArea1) / pA;
+                    ys_float32 pRatio = (xBLast.m_probProj[1].m_perProjectedSolidAngle.m_value * xBLast.m_projToArea1) / pA;
+                    *denom = pRatio * pRatio; // Balance heuristic with exponent 2
+                    *denomIsFinite = true;
+                }
+                else if (pAIsFinite)
+                {
+                    // To be precise, 'denom' should be the coefficient of the delta function.
+                    // For our use case, it suffices to set a garbage value.
+                    *denom = -1.0f;
+                    *denomIsFinite = false;
                 }
                 else
                 {
-                    ysAssert(pAIsFinite == false); // How to handle infinite ratio? Is it even possible?
-                    rA[0] = 0.0f;
+                    *denom = 0.0f;
+                    *denomIsFinite = true;
                 }
                 return;
             }
 
-            if (xA[1].m_probProj[0].m_perProjectedSolidAngle.m_isFinite == pAIsFinite)
+            // Traverse the path backwards, accumulating (P[i]/P[nA-1])^2 from i=nA-2 to i=-1
+            // ... where P[i] is the full path probability assuming xA[i] is the last vertex on subpath A.
+            // P[i]/P[nA-1] = P[i]/P[i+1] * ... * P[nA-3]/P[nA-2] * P[nA-2]/P[nA-1]
+
+            ys_float32 accum;
+
+            ys_float32 pRatio;
+            ys_int32 pRatioIsZeroCount;
             {
-                rA[0] = (xA[1].m_probProj[0].m_perProjectedSolidAngle.m_value * xA[0].m_projToArea1) / pA;
-            }
-            else
-            {
-                ysAssert(pAIsFinite == false); // How to handle infinite ratio? Is it even possible?
-                rA[0] = 0.0f;
-            }
+                const bool& p01Finite = xA[nA - 2].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
+                const ys_float32& p01 = xA[nA - 2].m_probProj[1].m_perProjectedSolidAngle.m_value * xA[nA - 2].m_projToArea1;
 
-            for (ys_int32 i = 1; i < nA - 1; ++i)
-            {
-                const bool& p01Finite = xA[i - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
-                const bool& p21Finite = xA[i + 1].m_probProj[0].m_perProjectedSolidAngle.m_isFinite;
-                if (p01Finite == p21Finite)
-                {
-                    // The probability to generate xA[i-1]->xA[i] as part of subpath A
-                    ys_float32 p01 = xA[i - 1].m_probProj[1].m_perProjectedSolidAngle.m_value * xA[i - 1].m_projToArea1;
-
-                    // The probability to generate xA[i+1]->xA[i] as part of the subpath B
-                    ys_float32 p21 = xA[i + 1].m_probProj[0].m_perProjectedSolidAngle.m_value * xA[i].m_projToArea1;
-
-                    rA[i] = p21 / p01;
-                }
-                else
-                {
-                    ysAssert(p21Finite); // How to handle infinite ratio? Is it even possible?
-                    rA[i] = 0.0f;
-                }
-            }
-
-            const bool& p01Finite = xA[nA - 2].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
-            const ys_float32& p01 = xA[nA - 2].m_probProj[1].m_perProjectedSolidAngle.m_value * xA[nA - 2].m_projToArea1;
-
-            bool p21Finite;
-            ys_float32 p21;
-            {
+                bool p21Finite;
+                ys_float32 p21;
                 if (nB > 0)
                 {
                     p21Finite = xB[nB - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
@@ -1472,48 +1492,109 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                     p21Finite = pBIsFinite;
                     p21 = pB;
                 }
+
+                if (p21Finite == false && p01Finite == true)
+                {
+                    *denom = -1.0f;
+                    *denomIsFinite = false;
+                    return;
+                }
+
+                pRatio = p21 / p01;
+                if (p21Finite == p01Finite)
+                {
+                    pRatioIsZeroCount = 0;
+                    accum = pRatio * pRatio;
+                }
+                else
+                {
+                    pRatioIsZeroCount = 1;
+                    accum = 0.0f;
+                }
             }
 
-            if (p01Finite == p21Finite)
+            for (ys_int32 i = nA - 2; i >= 1; --i)
             {
-                rA[nA - 1] = p21 / p01;
+                const bool& p01Finite = xA[i - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
+                const bool& p21Finite = xA[i + 1].m_probProj[0].m_perProjectedSolidAngle.m_isFinite;
+
+                if (p21Finite == false && p01Finite == true)
+                {
+                    pRatioIsZeroCount--;
+                }
+                else if (p21Finite == true && p01Finite == false)
+                {
+                    pRatioIsZeroCount++;
+                }
+
+                if (pRatioIsZeroCount < 0)
+                {
+                    *denom = -1.0f;
+                    *denomIsFinite = false;
+                    return;
+                }
+
+                // p01: The probability to generate xA[i-1]->xA[i] as part of subpath A
+                // p21: The probability to generate xA[i+1]->xA[i] as part of subpath B
+                ys_float32 p01 = xA[i - 1].m_probProj[1].m_perProjectedSolidAngle.m_value * xA[i - 1].m_projToArea1;
+                ys_float32 p21 = xA[i + 1].m_probProj[0].m_perProjectedSolidAngle.m_value * xA[i].m_projToArea1;
+                pRatio *= p21 / p01;
+                accum += (pRatioIsZeroCount == 0) ? pRatio * pRatio : 0.0f;
             }
-            else
+
             {
-                ysAssert(p21Finite); // How to handle infinite ratio? Is it even possible?
-                rA[nA - 1] = 0.0f;
+                const bool& p01Finite = pAIsFinite;
+                const bool& p21Finite = xA[1].m_probProj[0].m_perProjectedSolidAngle.m_isFinite;
+
+                if (p21Finite == false && p01Finite == true)
+                {
+                    pRatioIsZeroCount--;
+                }
+                else if (p21Finite == true && p01Finite == false)
+                {
+                    pRatioIsZeroCount++;
+                }
+
+                if (pRatioIsZeroCount < 0)
+                {
+                    *denom = -1.0f;
+                    *denomIsFinite = false;
+                    return;
+                }
+
+                ys_float32 p01 = pA;
+                ys_float32 p21 = xA[1].m_probProj[0].m_perProjectedSolidAngle.m_value * xA[0].m_projToArea1;
+                pRatio *= p21 / p01;
+                accum += (pRatioIsZeroCount == 0) ? pRatio * pRatio : 0.0f;
             }
+
+            *denom = accum;
+            *denomIsFinite = true;
         };
 
-        // pRatioL[i] = P[i-1] / P[i] ... where P[n] is the full path probability assuming y[n] is the last vertex on the light subpath.
-        ys_float32 pRatioL[GenerateSubpathOutput::s_nLCeil];
-        ys_float32 pRatioE[GenerateSubpathOutput::s_nECeil];
-        ComputeSubpathProbabilityRatios(pRatioL,
+        ys_float32 weightDenomL;
+        bool weightDenomIsFiniteL;
+        ComputeSubpathWeightDenominator(&weightDenomL, &weightDenomIsFiniteL,
             y, s, probArea_L0, probAreaFinite_L0,
             z, t, probArea_W0, probAreaFinite_W0);
-        ComputeSubpathProbabilityRatios(pRatioE,            
+        if (weightDenomIsFiniteL == false)
+        {
+            return ysVec4_zero;
+        }
+        ysAssert(weightDenomL >= 0.0f);
+
+        ys_float32 weightDenomE;
+        bool weightDenomIsFiniteE;
+        ComputeSubpathWeightDenominator(&weightDenomE, &weightDenomIsFiniteE,
             z, t, probArea_W0, probAreaFinite_W0,
             y, s, probArea_L0, probAreaFinite_L0);
-
-        ys_float32 weightInv;
+        if (weightDenomIsFiniteE == false)
         {
-            weightInv = 1.0f;
-
-            ys_float32 pRatio = 1.0f;
-            for (ys_int32 i = s - 1; i > -1; --i)
-            {
-                pRatio *= pRatioL[i];
-                weightInv += (pRatio * pRatio); // Balance heuristic with exponent 2
-            }
-
-            pRatio = 1.0f;
-            for (ys_int32 i = t - 1; i > -1; --i)
-            {
-                pRatio *= pRatioE[i];
-                weightInv += (pRatio * pRatio);
-            }
+            return ysVec4_zero;
         }
+        ysAssert(weightDenomE >= 0.0f);
 
+        ys_float32 weightInv = 1.0f + (weightDenomL + weightDenomE);
         weight = 1.0f / weightInv;
     }
 
@@ -1586,7 +1667,7 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
                         surfaceData.m_posWS = rco.m_hitPoint;
                         surfaceData.m_normalWS = rco.m_hitNormal;
                         surfaceData.m_tangentWS = rco.m_hitTangent;
-                        surfaceData.m_incomingDirectionWS = -pixelDirWS;
+                        surfaceData.m_incomingDirectionWS = -ysNormalize3(pixelDirWS);
 
                         // To be precise, what we should actually accumulate here is...
                         //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel

@@ -18,6 +18,8 @@ set(YOSHIPBR_SOURCE_FILES
     light/ysLightPoint.h
     mat/ysMaterial.cpp
     mat/ysMaterial.h
+    mat/ysMaterialMirror.cpp
+    mat/ysMaterialMirror.h
     mat/ysMaterialStandard.cpp
     mat/ysMaterialStandard.h
     scene/ysRender.cpp
