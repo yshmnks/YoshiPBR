@@ -555,11 +555,11 @@ struct PathVertex
 
     // 0: probability per projected solid angle of generating the direction to backtrack this subpath.
     // 1: probability per projected solid angle of generating the direction to move forward on this subpath.
-    // ... If not finite, the corresponding probability per projected solid angle is delta(w-w0), and m_probProj[i] is expected to 1.0
-    ysDirectionalProbabilityDensity m_probProj[2];
+    // ... If not finite, the corresponding probability per projected solid angle is delta(w-w0), and m_p[i] is expected to 1.0
+    ysDirectionalProbabilityDensity m_p[2];
 
-    // conversion factor from per-projected-solid-angle to per-area probabilities. Corresponds to the m_probProj[1].
-    // Note: The conversion factor for m_probProj[0] lives on the previous vertex.
+    // conversion factor from per-projected-solid-angle to per-area probabilities. Corresponds to the m_p[1].
+    // Note: The conversion factor for m_p[0] lives on the previous vertex.
     ys_float32 m_projToArea1;
 
     // BRDF for scattering at this point... or if this is the vertex on the light/sensor, the directional distribution of emitted radiance/
@@ -732,8 +732,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             y[nL].m_posWS = sp.m_point;
             y[nL].m_normalWS = sp.m_normal;
             y[nL].m_tangentWS = sp.m_tangent;
-            y[nL].m_probProj[0].SetInvalid();
-            y[nL].m_probProj[1].SetInvalid();
+            y[nL].m_p[0].SetInvalid();
+            y[nL].m_p[1].SetInvalid();
             y[nL].m_projToArea1 = -1.0f;
             y[nL].m_f.SetInvalid();
 
@@ -817,7 +817,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             {
                 break;
             }
-            y1->m_probProj[1] = p12;
+            y1->m_p[1] = p12;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
 
             y2->m_shape = m_shapes + srco.m_shapeId.m_index;
@@ -826,8 +826,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             y2->m_normalWS = srco.m_hitNormal;
             y2->m_tangentWS = srco.m_hitTangent;
             // Set some garbage values. They will be fixed when the next vertex is generated or when we join the light and eye paths
-            y2->m_probProj[0].SetInvalid();
-            y2->m_probProj[1].SetInvalid();
+            y2->m_p[0].SetInvalid();
+            y2->m_p[1].SetInvalid();
             y2->m_projToArea1 = -1.0f;
             y2->m_f.SetInvalid();
 
@@ -907,8 +907,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
                 break;
             }
 
-            y1->m_probProj[0] = p210;
-            y1->m_probProj[1] = p012;
+            y1->m_p[0] = p210;
+            y1->m_p[1] = p012;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
             y1->m_f = f012;
 
@@ -917,8 +917,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             y2->m_posWS = srco.m_hitPoint;
             y2->m_normalWS = srco.m_hitNormal;
             y2->m_tangentWS = srco.m_hitTangent;
-            y2->m_probProj[0].SetInvalid();
-            y2->m_probProj[1].SetInvalid();
+            y2->m_p[0].SetInvalid();
+            y2->m_p[1].SetInvalid();
             y2->m_projToArea1 = -1.0f;
             y2->m_f.SetInvalid();
 
@@ -934,14 +934,14 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
     {
         input.eyePathVertex0.InitializePathVertex(z + 0);
         input.eyePathVertex1.InitializePathVertex(z + 1);
-        z[0].m_probProj[0].SetInvalid();
-        z[0].m_probProj[1].SetInvalid();
-        z[0].m_probProj[1].m_perProjectedSolidAngle.m_value = 1.0f;
-        z[0].m_probProj[1].m_perProjectedSolidAngle.m_isFinite = false;
-        z[0].m_probProj[1].m_perSolidAngle.m_value = 1.0f; // Treat the sensor on the eye that is sensitive to this pixel as oriented directly towards the pixel.
-        z[0].m_probProj[1].m_perSolidAngle.m_isFinite = false;
-        z[1].m_probProj[0].SetInvalid();
-        z[1].m_probProj[1].SetInvalid();
+        z[0].m_p[0].SetInvalid();
+        z[0].m_p[1].SetInvalid();
+        z[0].m_p[1].m_perProjectedSolidAngle.m_value = 1.0f;
+        z[0].m_p[1].m_perProjectedSolidAngle.m_isFinite = false;
+        z[0].m_p[1].m_perSolidAngle.m_value = 1.0f; // Treat the sensor on the eye that is sensitive to this pixel as oriented directly towards the pixel.
+        z[0].m_p[1].m_perSolidAngle.m_isFinite = false;
+        z[1].m_p[0].SetInvalid();
+        z[1].m_p[1].SetInvalid();
         z[1].m_projToArea1 = -1.0f;
         z[1].m_f.SetInvalid();
 
@@ -1028,8 +1028,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             break;
         }
 
-        z1->m_probProj[0] = p210;
-        z1->m_probProj[1] = p012;
+        z1->m_p[0] = p210;
+        z1->m_p[1] = p012;
         z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
         z1->m_f = f210;
 
@@ -1038,8 +1038,8 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
         z2->m_posWS = srco.m_hitPoint;
         z2->m_normalWS = srco.m_hitNormal;
         z2->m_tangentWS = srco.m_hitTangent;
-        z2->m_probProj[0].SetInvalid();
-        z2->m_probProj[1].SetInvalid();
+        z2->m_p[0].SetInvalid();
+        z2->m_p[1].SetInvalid();
         z2->m_projToArea1 = -1.0f;
         z2->m_f.SetInvalid();
 
@@ -1153,7 +1153,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             ysAssert(x1->m_material->IsEmissive(this));
             ysIrradiance LSpatial = x1->m_material->EvaluateEmittedIrradiance(this);
             ysRadiance L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1);
-            x1->m_probProj[1] = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
+            x1->m_p[1] = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
             x1->m_f.m_value = L.m_value / LSpatial.m_value;
             x1->m_f.m_isFinite = L.m_isFinite;
         }
@@ -1164,8 +1164,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             ysVec4 v10 = x0->m_posWS - x1->m_posWS;
             ysVec4 u10 = ysNormalize3(v10);
             ysVec4 u10_LS1 = ysMulT33(R1, u10);
-            x1->m_probProj[0] = x1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1);
-            x1->m_probProj[1] = x1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u10_LS1, u12_LS1);
+            x1->m_p[0] = x1->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u10_LS1, u12_LS1);
+            x1->m_p[1] = x1->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u10_LS1, u12_LS1);
             x1->m_f = x1->m_material->EvaluateBRDF(this, u10_LS1, u12_LS1);
         }
 
@@ -1173,8 +1173,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
         ysVec4 u23 = ysNormalize3(v23);
         ysVec4 u23_LS2 = ysMulT33(R2, u23);
-        x2->m_probProj[0] = x2->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u21_LS2, u23_LS2);
-        x2->m_probProj[1] = x2->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u21_LS2, u23_LS2);
+        x2->m_p[0] = x2->m_material->ProbabilityDensityForGeneratedOutgoingDirection(this, u21_LS2, u23_LS2);
+        x2->m_p[1] = x2->m_material->ProbabilityDensityForGeneratedIncomingDirection(this, u21_LS2, u23_LS2);
         x2->m_f = x2->m_material->EvaluateBRDF(this, u21_LS2, u23_LS2);
 
         if (x1->m_f.m_isFinite == false || x2->m_f.m_isFinite == false)
@@ -1185,10 +1185,10 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             return ysVec4_zero;
         }
 
-        if (x1->m_probProj[1].m_perProjectedSolidAngle.m_isFinite == false ||
-            x2->m_probProj[1].m_perProjectedSolidAngle.m_isFinite == false ||
-            x1->m_probProj[1].m_perProjectedSolidAngle.m_value < ys_zeroSafe ||
-            x2->m_probProj[1].m_perProjectedSolidAngle.m_value < ys_zeroSafe)
+        if (x1->m_p[1].m_perProjectedSolidAngle.m_isFinite == false ||
+            x2->m_p[1].m_perProjectedSolidAngle.m_isFinite == false ||
+            x1->m_p[1].m_perProjectedSolidAngle.m_value < ys_zeroSafe ||
+            x2->m_p[1].m_perProjectedSolidAngle.m_value < ys_zeroSafe)
         {
             return ysVec4_zero;
         }
@@ -1216,7 +1216,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
         ysVec4 u23 = ysNormalize3(v23);
         ysVec4 u23_LS2 = ysMulT33(R2, u23);
-        x2->m_probProj[0] = x2->m_material->ProbabilityDensityForGeneratedEmission(this, u23_LS2);
+        x2->m_p[0] = x2->m_material->ProbabilityDensityForGeneratedEmission(this, u23_LS2);
         ysIrradiance LSpatial = x2->m_material->EvaluateEmittedIrradiance(this);
         ysRadiance L = x2->m_material->EvaluateEmittedRadiance(this, u23_LS2);
         if (L.m_isFinite == false)
@@ -1249,39 +1249,39 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
     {
         // Note that after Russian Roulette is taken into account, the delta function may be squashed such that "m_value <= 1.0f"
         ysAssert(
-            y[0].m_probProj[1].m_perProjectedSolidAngle.m_isFinite ||
-            y[0].m_probProj[1].m_perProjectedSolidAngle.m_value == 1.0f);
+            y[0].m_p[1].m_perProjectedSolidAngle.m_isFinite ||
+            y[0].m_p[1].m_perProjectedSolidAngle.m_value == 1.0f);
     }
 
     if (t > 0)
     {
         ysAssert(
-            z[0].m_probProj[1].m_perProjectedSolidAngle.m_isFinite ||
-            z[0].m_probProj[1].m_perProjectedSolidAngle.m_value == 1.0f);
+            z[0].m_p[1].m_perProjectedSolidAngle.m_isFinite ||
+            z[0].m_p[1].m_perProjectedSolidAngle.m_value == 1.0f);
     }
 
     if (s > 0 && t > 0)
     {
         ysAssert(
-            y[s - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite ||
-            y[s - 1].m_probProj[1].m_perProjectedSolidAngle.m_value == 1.0f);
+            y[s - 1].m_p[1].m_perProjectedSolidAngle.m_isFinite ||
+            y[s - 1].m_p[1].m_perProjectedSolidAngle.m_value == 1.0f);
         ysAssert(
-            z[t - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite ||
-            z[t - 1].m_probProj[1].m_perProjectedSolidAngle.m_value == 1.0f);
+            z[t - 1].m_p[1].m_perProjectedSolidAngle.m_isFinite ||
+            z[t - 1].m_p[1].m_perProjectedSolidAngle.m_value == 1.0f);
     }
 
     for (ys_int32 i = 1; i < s - 1; ++i)
     {
-        const ysDirectionalProbabilityDensity& p10 = y[i].m_probProj[0];
-        const ysDirectionalProbabilityDensity& p01 = y[i].m_probProj[1];
+        const ysDirectionalProbabilityDensity& p10 = y[i].m_p[0];
+        const ysDirectionalProbabilityDensity& p01 = y[i].m_p[1];
         ysAssert(p10.m_perProjectedSolidAngle.m_isFinite || p10.m_perProjectedSolidAngle.m_value == 1.0f);
         ysAssert(p01.m_perProjectedSolidAngle.m_isFinite || p01.m_perProjectedSolidAngle.m_value == 1.0f);
     }
 
     for (ys_int32 i = 1; i < t - 1; ++i)
     {
-        const ysDirectionalProbabilityDensity& p10 = z[i].m_probProj[0];
-        const ysDirectionalProbabilityDensity& p01 = z[i].m_probProj[1];
+        const ysDirectionalProbabilityDensity& p10 = z[i].m_p[0];
+        const ysDirectionalProbabilityDensity& p01 = z[i].m_p[1];
         ysAssert(p10.m_perProjectedSolidAngle.m_isFinite || p10.m_perProjectedSolidAngle.m_value == 1.0f);
         ysAssert(p01.m_perProjectedSolidAngle.m_isFinite || p01.m_perProjectedSolidAngle.m_value == 1.0f);
     }
@@ -1305,10 +1305,10 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                     continue;
                 }
                 PathVertex* pv = y + i;
-                ysVec4 fp = sDivide(pv->m_f, pv->m_probProj[1].m_perProjectedSolidAngle);
+                ysVec4 fp = sDivide(pv->m_f, pv->m_p[1].m_perProjectedSolidAngle);
                 ys_float32 q = ysClamp(ysMax(ysMax(fp.x, fp.y), fp.z), s_minRussianRouletteContinuationProbability, 1.0f);
-                pv->m_probProj[1].m_perSolidAngle.m_value *= q;
-                pv->m_probProj[1].m_perProjectedSolidAngle.m_value *= q;
+                pv->m_p[1].m_perSolidAngle.m_value *= q;
+                pv->m_p[1].m_perProjectedSolidAngle.m_value *= q;
             }
     
             for (ys_int32 i = t - 1; i > 0; --i, ++idx)
@@ -1318,10 +1318,10 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                     continue;
                 }
                 PathVertex* pv = z + i;
-                ysVec4 fp = sDivide(pv->m_f, pv->m_probProj[0].m_perProjectedSolidAngle);
+                ysVec4 fp = sDivide(pv->m_f, pv->m_p[0].m_perProjectedSolidAngle);
                 ys_float32 q = ysClamp(ysMax(ysMax(fp.x, fp.y), fp.z), s_minRussianRouletteContinuationProbability, 1.0f);
-                pv->m_probProj[0].m_perSolidAngle.m_value *= q;
-                pv->m_probProj[0].m_perProjectedSolidAngle.m_value *= q;
+                pv->m_p[0].m_perSolidAngle.m_value *= q;
+                pv->m_p[0].m_perProjectedSolidAngle.m_value *= q;
             }
         }
     
@@ -1334,10 +1334,10 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                     continue;
                 }
                 PathVertex* pv = z + i;
-                ysVec4 fp = sDivide(pv->m_f, pv->m_probProj[1].m_perProjectedSolidAngle);
+                ysVec4 fp = sDivide(pv->m_f, pv->m_p[1].m_perProjectedSolidAngle);
                 ys_float32 q = ysClamp(ysMax(ysMax(fp.x, fp.y), fp.z), s_minRussianRouletteContinuationProbability, 1.0f);
-                pv->m_probProj[1].m_perSolidAngle.m_value *= q;
-                pv->m_probProj[1].m_perProjectedSolidAngle.m_value *= q;
+                pv->m_p[1].m_perSolidAngle.m_value *= q;
+                pv->m_p[1].m_perProjectedSolidAngle.m_value *= q;
             }
     
             for (ys_int32 i = s - 1; i > 0; --i, ++idx)
@@ -1347,10 +1347,10 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                     continue;
                 }
                 PathVertex* pv = y + i;
-                ysVec4 fp = sDivide(pv->m_f, pv->m_probProj[0].m_perProjectedSolidAngle);
+                ysVec4 fp = sDivide(pv->m_f, pv->m_p[0].m_perProjectedSolidAngle);
                 ys_float32 q = ysClamp(ysMax(ysMax(fp.x, fp.y), fp.z), s_minRussianRouletteContinuationProbability, 1.0f);
-                pv->m_probProj[0].m_perSolidAngle.m_value *= q;
-                pv->m_probProj[0].m_perProjectedSolidAngle.m_value *= q;
+                pv->m_p[0].m_perSolidAngle.m_value *= q;
+                pv->m_p[0].m_perProjectedSolidAngle.m_value *= q;
             }
         }
     }
@@ -1366,9 +1366,9 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             estimatorL *= LSpatialOverPSpatial0;
             for (ys_int32 i = 0; i < s - 1; ++i)
             {
-                if (y[i].m_f.m_isFinite == y[i].m_probProj[1].m_perProjectedSolidAngle.m_isFinite)
+                if (y[i].m_f.m_isFinite == y[i].m_p[1].m_perProjectedSolidAngle.m_isFinite)
                 {
-                    estimatorL *= y[i].m_f.m_value / ysSplat(y[i].m_probProj[1].m_perProjectedSolidAngle.m_value);
+                    estimatorL *= y[i].m_f.m_value / ysSplat(y[i].m_p[1].m_perProjectedSolidAngle.m_value);
                 }
                 else
                 {
@@ -1388,9 +1388,9 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             estimatorE *= WSpatialOverPSpatial0;
             for (ys_int32 i = 0; i < t - 1; ++i)
             {
-                if (z[i].m_f.m_isFinite == z[i].m_probProj[1].m_perProjectedSolidAngle.m_isFinite)
+                if (z[i].m_f.m_isFinite == z[i].m_p[1].m_perProjectedSolidAngle.m_isFinite)
                 {
-                    estimatorE *= z[i].m_f.m_value / ysSplat(z[i].m_probProj[1].m_perProjectedSolidAngle.m_value);
+                    estimatorE *= z[i].m_f.m_value / ysSplat(z[i].m_p[1].m_perProjectedSolidAngle.m_value);
                 }
                 else
                 {
@@ -1447,9 +1447,9 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             if (nA == 1)
             {
                 const PathVertex& xBLast = xB[nB - 1];
-                if (xBLast.m_probProj[1].m_perProjectedSolidAngle.m_isFinite == pAIsFinite)
+                if (xBLast.m_p[1].m_perProjectedSolidAngle.m_isFinite == pAIsFinite)
                 {
-                    ys_float32 pRatio = (xBLast.m_probProj[1].m_perProjectedSolidAngle.m_value * xBLast.m_projToArea1) / pA;
+                    ys_float32 pRatio = (xBLast.m_p[1].m_perProjectedSolidAngle.m_value * xBLast.m_projToArea1) / pA;
                     *denom = pRatio * pRatio; // Balance heuristic with exponent 2
                     *denomIsFinite = true;
                 }
@@ -1477,15 +1477,15 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             ys_float32 pRatio;
             ys_int32 pRatioIsZeroCount;
             {
-                const bool& p01Finite = xA[nA - 2].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
-                const ys_float32& p01 = xA[nA - 2].m_probProj[1].m_perProjectedSolidAngle.m_value * xA[nA - 2].m_projToArea1;
+                const bool& p01Finite = xA[nA - 2].m_p[1].m_perProjectedSolidAngle.m_isFinite;
+                const ys_float32& p01 = xA[nA - 2].m_p[1].m_perProjectedSolidAngle.m_value * xA[nA - 2].m_projToArea1;
 
                 bool p21Finite;
                 ys_float32 p21;
                 if (nB > 0)
                 {
-                    p21Finite = xB[nB - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
-                    p21 = xB[nB - 1].m_probProj[1].m_perProjectedSolidAngle.m_value * xB[nB - 1].m_projToArea1;
+                    p21Finite = xB[nB - 1].m_p[1].m_perProjectedSolidAngle.m_isFinite;
+                    p21 = xB[nB - 1].m_p[1].m_perProjectedSolidAngle.m_value * xB[nB - 1].m_projToArea1;
                 }
                 else
                 {
@@ -1515,8 +1515,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
 
             for (ys_int32 i = nA - 2; i >= 1; --i)
             {
-                const bool& p01Finite = xA[i - 1].m_probProj[1].m_perProjectedSolidAngle.m_isFinite;
-                const bool& p21Finite = xA[i + 1].m_probProj[0].m_perProjectedSolidAngle.m_isFinite;
+                const bool& p01Finite = xA[i - 1].m_p[1].m_perProjectedSolidAngle.m_isFinite;
+                const bool& p21Finite = xA[i + 1].m_p[0].m_perProjectedSolidAngle.m_isFinite;
 
                 if (p21Finite == false && p01Finite == true)
                 {
@@ -1536,15 +1536,15 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
 
                 // p01: The probability to generate xA[i-1]->xA[i] as part of subpath A
                 // p21: The probability to generate xA[i+1]->xA[i] as part of subpath B
-                ys_float32 p01 = xA[i - 1].m_probProj[1].m_perProjectedSolidAngle.m_value * xA[i - 1].m_projToArea1;
-                ys_float32 p21 = xA[i + 1].m_probProj[0].m_perProjectedSolidAngle.m_value * xA[i].m_projToArea1;
+                ys_float32 p01 = xA[i - 1].m_p[1].m_perProjectedSolidAngle.m_value * xA[i - 1].m_projToArea1;
+                ys_float32 p21 = xA[i + 1].m_p[0].m_perProjectedSolidAngle.m_value * xA[i].m_projToArea1;
                 pRatio *= p21 / p01;
                 accum += (pRatioIsZeroCount == 0) ? pRatio * pRatio : 0.0f;
             }
 
             {
                 const bool& p01Finite = pAIsFinite;
-                const bool& p21Finite = xA[1].m_probProj[0].m_perProjectedSolidAngle.m_isFinite;
+                const bool& p21Finite = xA[1].m_p[0].m_perProjectedSolidAngle.m_isFinite;
 
                 if (p21Finite == false && p01Finite == true)
                 {
@@ -1563,7 +1563,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
                 }
 
                 ys_float32 p01 = pA;
-                ys_float32 p21 = xA[1].m_probProj[0].m_perProjectedSolidAngle.m_value * xA[0].m_projToArea1;
+                ys_float32 p21 = xA[1].m_p[0].m_perProjectedSolidAngle.m_value * xA[0].m_projToArea1;
                 pRatio *= p21 / p01;
                 accum += (pRatioIsZeroCount == 0) ? pRatio * pRatio : 0.0f;
             }
