@@ -16,12 +16,16 @@ set(YOSHIPBR_SOURCE_FILES
     light/ysLight.h
     light/ysLightPoint.cpp
     light/ysLightPoint.h
-    mat/ysMaterial.cpp
-    mat/ysMaterial.h
-    mat/ysMaterialMirror.cpp
-    mat/ysMaterialMirror.h
-    mat/ysMaterialStandard.cpp
-    mat/ysMaterialStandard.h
+    mat/emissive/ysEmissiveMaterial.cpp
+    mat/emissive/ysEmissiveMaterial.h
+    mat/emissive/ysEmissiveMaterialUniform.cpp
+    mat/emissive/ysEmissiveMaterialUniform.h
+    mat/reflective/ysMaterial.cpp
+    mat/reflective/ysMaterial.h
+    mat/reflective/ysMaterialMirror.cpp
+    mat/reflective/ysMaterialMirror.h
+    mat/reflective/ysMaterialStandard.cpp
+    mat/reflective/ysMaterialStandard.h
     scene/ysRender.cpp
     scene/ysRender.h
     scene/ysScene.cpp

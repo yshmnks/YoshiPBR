@@ -2,9 +2,11 @@
 #include "YoshiPBR/ysDebugDraw.h"
 #include "light/ysLight.h"
 #include "light/ysLightPoint.h"
-#include "mat/ysMaterial.h"
-#include "mat/ysMaterialMirror.h"
-#include "mat/ysMaterialStandard.h"
+#include "mat/emissive/ysEmissiveMaterial.h"
+#include "mat/emissive/ysEmissiveMaterialUniform.h"
+#include "mat/reflective/ysMaterial.h"
+#include "mat/reflective/ysMaterialMirror.h"
+#include "mat/reflective/ysMaterialStandard.h"
 #include "YoshiPBR/ysLock.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
@@ -12,6 +14,172 @@
 #include "YoshiPBR/ysTriangle.h"
 
 ysScene* ysScene::s_scenes[YOSHIPBR_MAX_SCENE_COUNT] = { nullptr };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static ysShapeId sShapeIdFromPtr(const ysScene* scene, const ysShape* shape)
+{
+    ysAssert(shape != nullptr);
+    ysShapeId id;
+    id.m_index = shape - scene->m_shapes;
+    ysAssert(0 <= id.m_index && id.m_index < scene->m_shapeCount);
+    return id;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct CollectClosestReflectiveData
+{
+    const ysScene* m_scene;
+    ysShapeId m_ignoreShapeId;
+
+    bool m_hit;
+    ysSceneRayCastOutput m_output;
+};
+
+static ysRayCastFlowControlCode sCollectClosestReflective(const ysSceneRayCastOutput& hitOutput, void* voidData)
+{
+    CollectClosestReflectiveData* data = static_cast<CollectClosestReflectiveData*>(voidData);
+    if (hitOutput.m_shapeId == data->m_ignoreShapeId)
+    {
+        return ysRayCastFlowControlCode::e_continue;
+    }
+    const ysShape* shape = data->m_scene->m_shapes + hitOutput.m_shapeId.m_index;
+    bool isReflective = (shape->m_materialId != ys_nullMaterialId);
+    if (isReflective)
+    {
+        data->m_hit = true;
+        data->m_output = hitOutput;
+        return ysRayCastFlowControlCode::e_clip;
+    }
+    return ysRayCastFlowControlCode::e_continue;
+}
+
+static bool sRayCastClosestReflective(const ysScene* scene, ysSceneRayCastOutput* output, const ysSceneRayCastInput& input, const ysShapeId& ignoreShapeId)
+{
+    CollectClosestReflectiveData data;
+    data.m_scene = scene;
+    data.m_ignoreShapeId = ignoreShapeId;
+    data.m_hit = false;
+    scene->m_bvh.RayCast(scene, input, &data, sCollectClosestReflective);
+    *output = data.m_output;
+    return data.m_hit;
+}
+
+static bool sRayCastClosestReflective(const ysScene* scene, ysSceneRayCastOutput* output, const ysSceneRayCastInput& input, const ysShape* ignoreShape)
+{
+    return sRayCastClosestReflective(scene, output, input, sShapeIdFromPtr(scene, ignoreShape));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct SingleReflectiveMultipleEmissives
+{
+    bool m_hitReflective;
+    ysSceneRayCastOutput m_reflectiveOutput;
+
+    static const ys_int32 s_maxEmissiveCount = 16;
+    ysSceneRayCastOutput m_emissiveOutputs[s_maxEmissiveCount];
+    ys_int32 m_emissiveCount;
+};
+
+struct CollectEmissivesAndClosestReflectiveData
+{
+    const ysScene* m_scene;
+    ysShapeId m_ignoreShapeId;
+
+    SingleReflectiveMultipleEmissives* m_output;
+};
+
+static ysRayCastFlowControlCode sCollectEmissivesAndClosestReflective(const ysSceneRayCastOutput& hitOutput, void* voidData)
+{
+    CollectEmissivesAndClosestReflectiveData* data = static_cast<CollectEmissivesAndClosestReflectiveData*>(voidData);
+    if (hitOutput.m_shapeId == data->m_ignoreShapeId)
+    {
+        return ysRayCastFlowControlCode::e_continue;
+    }
+    SingleReflectiveMultipleEmissives* srme = data->m_output;
+    const ysShape* shape = data->m_scene->m_shapes + hitOutput.m_shapeId.m_index;
+    bool isReflective = (shape->m_materialId != ys_nullMaterialId);
+    if (isReflective)
+    {
+        srme->m_hitReflective = true;
+        srme->m_reflectiveOutput = hitOutput;
+        return ysRayCastFlowControlCode::e_clip;
+    }
+    bool isEmissive = (shape->m_emissiveMaterialId != ys_nullEmissiveMaterialId);
+    if (isEmissive)
+    {
+        srme->m_emissiveOutputs[srme->m_emissiveCount++] = hitOutput;
+    }
+    return ysRayCastFlowControlCode::e_continue;
+}
+
+static void sRayCastClosestReflective_CollectEmissives
+(
+    const ysScene* scene,
+    SingleReflectiveMultipleEmissives* output,
+    const ysSceneRayCastInput& input,
+    const ysShapeId& ignoreShapeId
+)
+{
+    output->m_hitReflective = false;
+    output->m_emissiveCount = 0;
+
+    CollectEmissivesAndClosestReflectiveData data;
+    data.m_scene = scene;
+    data.m_ignoreShapeId = ignoreShapeId;
+    data.m_output = output;
+
+    scene->m_bvh.RayCast(scene, input, &data, sCollectEmissivesAndClosestReflective);
+
+    if (output->m_hitReflective == false)
+    {
+        ysAssert(output->m_emissiveCount == 0);
+        return;
+    }
+    
+    ys_int32 n = 0;
+    for (ys_int32 i = 0; i < output->m_emissiveCount; ++i)
+    {
+        if (output->m_emissiveOutputs[i].m_lambda < output->m_reflectiveOutput.m_lambda)
+        {
+            output->m_emissiveOutputs[n] = output->m_emissiveOutputs[i];
+            n++;
+        }
+    }
+    output->m_emissiveCount = n;
+}
+
+static void sRayCastClosestReflective_CollectEmissives(const ysScene* scene, SingleReflectiveMultipleEmissives* output, const ysSceneRayCastInput& input, const ysShape* ingoreShape)
+{
+    sRayCastClosestReflective_CollectEmissives(scene, output, input, sShapeIdFromPtr(scene, ingoreShape));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static ysVec4 sAccumulateDirectRadiance(const ysScene* scene, const ysVec4& dirWS, const ysSceneRayCastOutput* emissiveHits, ys_int32 emissiveHitCount)
+{
+    ysVec4 radiance = ysVec4_zero;
+    for (ys_int32 i = 0; i < emissiveHitCount; ++i)
+    {
+        const ysSceneRayCastOutput& o = emissiveHits[i];
+        const ysShape* s = scene->m_shapes + o.m_shapeId.m_index;
+        ysAssert(s->m_materialId == ys_nullMaterialId);
+        ysAssert(s->m_emissiveMaterialId != ys_nullEmissiveMaterialId);
+        const ysEmissiveMaterial* e = scene->m_emissiveMaterials + s->m_emissiveMaterialId.m_index;
+        ysMtx44 R;
+        R.cx = o.m_hitTangent;
+        R.cy = ysCross(o.m_hitNormal, o.m_hitTangent);
+        R.cz = o.m_hitNormal;
+        ysRadiance L = e->EvaluateRadiance(scene, ysMulT33(R, dirWS));
+        if (L.m_isFinite)
+        {
+            radiance += L.m_value;
+        }
+    }
+    return radiance;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +191,8 @@ void ysScene::Reset()
     m_materials = nullptr;
     m_materialStandards = nullptr;
     m_materialMirrors = nullptr;
+    m_emissiveMaterials = nullptr;
+    m_emissiveMaterialUniforms = nullptr;
     m_lights = nullptr;
     m_lightPoints = nullptr;
     m_emissiveShapeIndices = nullptr;
@@ -31,6 +201,8 @@ void ysScene::Reset()
     m_materialCount = 0;
     m_materialStandardCount = 0;
     m_materialMirrorCount = 0;
+    m_emissiveMaterialCount = 0;
+    m_emissiveMaterialUniformCount = 0;
     m_lightCount = 0;
     m_lightPointCount = 0;
     m_emissiveShapeCount = 0;
@@ -41,29 +213,45 @@ void ysScene::Reset()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysScene::Create(const ysSceneDef& def)
 {
-    m_shapeCount = def.m_triangleCount;
-    m_shapes = static_cast<ysShape*>(ysMalloc(sizeof(ysShape) * m_shapeCount));
+    {
+        m_shapeCount = def.m_triangleCount;
+        m_shapes = static_cast<ysShape*>(ysMalloc(sizeof(ysShape) * m_shapeCount));
 
-    m_triangleCount = def.m_triangleCount;
-    m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
+        m_triangleCount = def.m_triangleCount;
+        m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
+    }
 
-    m_materialCount = def.m_materialStandardCount + def.m_materialMirrorCount;
-    m_materials = static_cast<ysMaterial*>(ysMalloc(sizeof(ysMaterial) * m_materialCount));
+    {
+        m_materialCount = def.m_materialStandardCount + def.m_materialMirrorCount;
+        m_materials = static_cast<ysMaterial*>(ysMalloc(sizeof(ysMaterial) * m_materialCount));
 
-    m_materialStandardCount = def.m_materialStandardCount;
-    m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
+        m_materialStandardCount = def.m_materialStandardCount;
+        m_materialStandards = static_cast<ysMaterialStandard*>(ysMalloc(sizeof(ysMaterialStandard) * m_materialStandardCount));
 
-    m_materialMirrorCount = def.m_materialMirrorCount;
-    m_materialMirrors = static_cast<ysMaterialMirror*>(ysMalloc(sizeof(ysMaterialMirror) * m_materialMirrorCount));
+        m_materialMirrorCount = def.m_materialMirrorCount;
+        m_materialMirrors = static_cast<ysMaterialMirror*>(ysMalloc(sizeof(ysMaterialMirror) * m_materialMirrorCount));
+    }
 
-    m_lightCount = def.m_lightPointCount;
-    m_lights = static_cast<ysLight*>(ysMalloc(sizeof(ysLight) * m_lightCount));
+    {
+        m_emissiveMaterialCount = def.m_emissiveMaterialUniformCount;
+        m_emissiveMaterials = static_cast<ysEmissiveMaterial*>(ysMalloc(sizeof(ysEmissiveMaterial) * m_emissiveMaterialCount));
 
-    m_lightPointCount = def.m_lightPointCount;
-    m_lightPoints = static_cast<ysLightPoint*>(ysMalloc(sizeof(ysLightPoint) * m_lightPointCount));
+        m_emissiveMaterialUniformCount = def.m_emissiveMaterialUniformCount;
+        m_emissiveMaterialUniforms = static_cast<ysEmissiveMaterialUniform*>(ysMalloc(sizeof(ysEmissiveMaterialUniform) * m_emissiveMaterialUniformCount));
+    }
+
+    {
+        m_lightCount = def.m_lightPointCount;
+        m_lights = static_cast<ysLight*>(ysMalloc(sizeof(ysLight) * m_lightCount));
+
+        m_lightPointCount = def.m_lightPointCount;
+        m_lightPoints = static_cast<ysLightPoint*>(ysMalloc(sizeof(ysLightPoint) * m_lightPointCount));
+    }
 
     ys_int32 materialStandardStartIdx = 0;
     ys_int32 materialMirrorStartIdx = m_materialStandardCount;
+
+    ys_int32 emissiveMaterialUniformStartIdx = 0;
 
     ////////////
     // Shapes //
@@ -94,11 +282,27 @@ void ysScene::Create(const ysSceneDef& def)
 
         switch (srcTriangle->m_materialType)            
         {
+            case ysMaterialType::e_none:
+                shape->m_materialId = ys_nullMaterialId;
+                break;
             case ysMaterialType::e_standard:
                 shape->m_materialId.m_index = materialStandardStartIdx + srcTriangle->m_materialTypeIndex;
                 break;
             case ysMaterialType::e_mirror:
                 shape->m_materialId.m_index = materialMirrorStartIdx + srcTriangle->m_materialTypeIndex;
+                break;
+            default:
+                ysAssert(false);
+                break;
+        }
+
+        switch (srcTriangle->m_emissiveMaterialType)
+        {
+            case ysEmissiveMaterialType::e_none:
+                shape->m_emissiveMaterialId = ys_nullEmissiveMaterialId;
+                break;
+            case ysEmissiveMaterialType::e_uniform:
+                shape->m_emissiveMaterialId.m_index = emissiveMaterialUniformStartIdx + srcTriangle->m_emissiveMaterialTypeIndex;
                 break;
             default:
                 ysAssert(false);
@@ -115,41 +319,61 @@ void ysScene::Create(const ysSceneDef& def)
     ysFree(shapeIds);
     ysFree(aabbs);
 
-    ///////////////
-    // Materials //
-    ///////////////
-
-    ys_int32 materialIdx = 0;
-
-    for (ys_int32 i = 0; i < m_materialStandardCount; ++i, ++materialIdx)
+    //////////////////////////
+    // Reflective Materials //
+    //////////////////////////
     {
-        ysMaterialStandard* dst = m_materialStandards + i;
-        const ysMaterialStandardDef* src = def.m_materialStandards + i;
-        dst->m_albedoDiffuse = ysMax(src->m_albedoDiffuse, ysVec4_zero);
-        dst->m_albedoSpecular = ysMax(src->m_albedoSpecular, ysVec4_zero);
-        dst->m_emissiveDiffuse = ysMax(src->m_emissiveDiffuse, ysVec4_zero);
-        dst->m_albedoDiffuse.w = 0.0f;
-        dst->m_albedoSpecular.w = 0.0f;
-        dst->m_emissiveDiffuse.w = 0.0f;
+        ys_int32 materialIdx = 0;
 
-        ysMaterial* material = m_materials + materialIdx;
-        material->m_type = ysMaterial::Type::e_standard;
-        material->m_typeIndex = i;
+        for (ys_int32 i = 0; i < m_materialStandardCount; ++i, ++materialIdx)
+        {
+            ysMaterialStandard* dst = m_materialStandards + i;
+            const ysMaterialStandardDef* src = def.m_materialStandards + i;
+            dst->m_albedoDiffuse = ysMax(src->m_albedoDiffuse, ysVec4_zero);
+            dst->m_albedoSpecular = ysMax(src->m_albedoSpecular, ysVec4_zero);
+            dst->m_albedoDiffuse.w = 0.0f;
+            dst->m_albedoSpecular.w = 0.0f;
+
+            ysMaterial* material = m_materials + materialIdx;
+            material->m_type = ysMaterial::Type::e_standard;
+            material->m_typeIndex = i;
+        }
+
+        for (ys_int32 i = 0; i < m_materialMirrorCount; ++i, ++materialIdx)
+        {
+            ysMaterialMirror* dst = m_materialMirrors + i;
+            const ysMaterialMirrorDef* src = def.m_materialMirrors + i;
+            YS_REF(dst);
+            YS_REF(src);
+
+            ysMaterial* material = m_materials + materialIdx;
+            material->m_type = ysMaterial::Type::e_mirror;
+            material->m_typeIndex = i;
+        }
+
+        ysAssert(materialIdx == m_materialCount);
     }
 
-    for (ys_int32 i = 0; i < m_materialMirrorCount; ++i, ++materialIdx)
+    ////////////////////////
+    // Emissive Materials //
+    ////////////////////////
     {
-        ysMaterialMirror* dst = m_materialMirrors + i;
-        const ysMaterialMirrorDef* src = def.m_materialMirrors + i;
-        YS_REF(dst);
-        YS_REF(src);
+        ys_int32 emissiveMaterialIdx = 0;
 
-        ysMaterial* material = m_materials + materialIdx;
-        material->m_type = ysMaterial::Type::e_mirror;
-        material->m_typeIndex = i;
+        for (ys_int32 i = 0; i < m_emissiveMaterialUniformCount; ++i, ++emissiveMaterialIdx)
+        {
+            ysEmissiveMaterialUniform* dst = m_emissiveMaterialUniforms + i;
+            const ysEmissiveMaterialUniformDef* src = def.m_emissiveMaterialUniforms + i;
+            dst->m_radiance = ysMax(src->m_radiance, ysVec4_zero);
+            dst->m_radiance.w = 0.0f;
+
+            ysEmissiveMaterial* emissiveMaterial = m_emissiveMaterials + emissiveMaterialIdx;
+            emissiveMaterial->m_type = ysEmissiveMaterial::Type::e_uniform;
+            emissiveMaterial->m_typeIndex = i;
+        }
+
+        ysAssert(emissiveMaterialIdx == m_emissiveMaterialCount);
     }
-
-    ysAssert(materialIdx == m_materialCount);
 
     ////////////
     // Lights //
@@ -172,19 +396,14 @@ void ysScene::Create(const ysSceneDef& def)
 
     ysAssert(lightIdx == m_lightCount);
 
-    // Add emissive shapes to the special BVH
+    // Add emissive shapes to the special list so that we can randomly choose an area light to sample
+    // TODO: Might also be good to have separate BVHs for reflective and emissive shapes.
     m_emissiveShapeCount = 0;
     for (ys_int32 i = 0; i < m_shapeCount; ++i)
     {
         const ysShape* shape = m_shapes + i;
-        const ysMaterial* baseMaterial = m_materials + shape->m_materialId.m_index;
-        if (baseMaterial->m_type == ysMaterial::Type::e_standard)
+        if (shape->m_emissiveMaterialId != ys_nullEmissiveMaterialId)
         {
-            const ysMaterialStandard* material = m_materialStandards + baseMaterial->m_typeIndex;
-            if (material->m_emissiveDiffuse == ysVec4_zero)
-            {
-                continue;
-            }
             m_emissiveShapeCount++;
         }
     }
@@ -194,14 +413,8 @@ void ysScene::Create(const ysSceneDef& def)
     for (ys_int32 i = 0; i < m_shapeCount; ++i)
     {
         const ysShape* shape = m_shapes + i;
-        const ysMaterial* baseMaterial = m_materials + shape->m_materialId.m_index;
-        if (baseMaterial->m_type == ysMaterial::Type::e_standard)
+        if (shape->m_emissiveMaterialId != ys_nullEmissiveMaterialId)
         {
-            const ysMaterialStandard* material = m_materialStandards + baseMaterial->m_typeIndex;
-            if (material->m_emissiveDiffuse == ysVec4_zero)
-            {
-                continue;
-            }
             m_emissiveShapeIndices[emissiveShapeIdx++] = i;
         }
     }
@@ -236,17 +449,22 @@ void ysScene::Destroy()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool ysScene::RayCastClosest(ysSceneRayCastOutput* output, const ysSceneRayCastInput& input) const
-{
-    return m_bvh.RayCastClosest(this, output, input);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysScene::ysSurfaceData
 {
+    void SetShape(const ysScene* scene, const ysShapeId& shapeId)
+    {
+        m_shape = scene->m_shapes + shapeId.m_index;
+        m_material = (m_shape->m_materialId == ys_nullMaterialId)
+            ? nullptr
+            : scene->m_materials + m_shape->m_materialId.m_index;
+        m_emissive = (m_shape->m_emissiveMaterialId == ys_nullEmissiveMaterialId)
+            ? nullptr
+            : scene->m_emissiveMaterials + m_shape->m_emissiveMaterialId.m_index;
+    }
+
     const ysShape* m_shape;
     const ysMaterial* m_material;
+    const ysEmissiveMaterial* m_emissive;
     ysVec4 m_posWS;
     ysVec4 m_normalWS;
     ysVec4 m_tangentWS;
@@ -275,10 +493,11 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
     }
     ysVec4 w12_LS1 = ysMulT33(R1, w12); // direction 1->2 expressed in the frame of surface 1 (LS1: "in the local space of surface 1").
 
-    ysVec4 emittedRadiance;
+    ysVec4 emittedRadiance = ysVec4_zero;
+    if (surfaceData.m_emissive != nullptr)
     {
         // In principle, sampling directionally-specular emission is inconceivable for unidirectional path tracing.
-        ysRadiance emitL = mat1->EvaluateEmittedRadiance(this, w12_LS1);
+        ysRadiance emitL = surfaceData.m_emissive->EvaluateRadiance(this, w12_LS1);
         emittedRadiance = emitL.m_isFinite ? emitL.m_value : ysVec4_zero;
     }
 
@@ -310,10 +529,10 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
         ysSceneRayCastInput srci;
         srci.m_maxLambda = 1.0f;
         srci.m_direction = v10;
-        srci.m_origin = x1 + w10 * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+        srci.m_origin = x1;
 
         ysSceneRayCastOutput srco;
-        bool occluded = RayCastClosest(&srco, srci);
+        bool occluded = sRayCastClosestReflective(this, &srco, srci, shape1);
         if (occluded)
         {
             continue;
@@ -347,23 +566,28 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
             ysSceneRayCastInput srci;
             srci.m_maxLambda = ys_maxFloat;
             srci.m_direction = w10;
-            srci.m_origin = x1 + w10 * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
+            srci.m_origin = x1;
         
-            ysSceneRayCastOutput srco;
-            bool hit = RayCastClosest(&srco, srci);
-            if (hit)
+            SingleReflectiveMultipleEmissives srme;
+            sRayCastClosestReflective_CollectEmissives(this, &srme, srci, shape1);
+            if (srme.m_hitReflective || srme.m_emissiveCount > 0)
             {
-                ysSurfaceData surface0;
-                surface0.m_shape = m_shapes + srco.m_shapeId.m_index;
-                surface0.m_material = m_materials + surface0.m_shape->m_materialId.m_index;
-                surface0.m_posWS = srco.m_hitPoint;
-                surface0.m_normalWS = srco.m_hitNormal;
-                surface0.m_tangentWS = srco.m_hitTangent;
-                surface0.m_incomingDirectionWS = -w10;
-        
-                ysVec4 incomingRadiance = SampleRadiance(surface0, bounceCount + 1, maxBounceCount, sampleLight);
-                ysAssert(ysAllGE3(incomingRadiance, ysVec4_zero));
-                ysVec4 radiance = f012.m_value * incomingRadiance / ysSplat(p.m_perProjectedSolidAngle.m_value);
+                ysVec4 radiance = sAccumulateDirectRadiance(this, -w10, srme.m_emissiveOutputs, srme.m_emissiveCount);
+                if (srme.m_hitReflective)
+                {
+                    const ysSceneRayCastOutput &opt = srme.m_reflectiveOutput;
+
+                    ysSurfaceData surface0;
+                    surface0.SetShape(this, opt.m_shapeId);
+                    surface0.m_posWS = opt.m_hitPoint;
+                    surface0.m_normalWS = opt.m_hitNormal;
+                    surface0.m_tangentWS = opt.m_hitTangent;
+                    surface0.m_incomingDirectionWS = -w10;
+
+                    ysVec4 incomingRadiance = SampleRadiance(surface0, bounceCount + 1, maxBounceCount, sampleLight);
+                    ysAssert(ysAllGE3(incomingRadiance, ysVec4_zero));
+                    radiance += f012.m_value * incomingRadiance / ysSplat(p.m_perProjectedSolidAngle.m_value);
+                }
         
                 ys_float32 weight = 1.0f;
                 if (sampleLight && p.m_perSolidAngle.m_isFinite)
@@ -449,93 +673,87 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
                 }
 
                 ysSceneRayCastInput srci;
-                srci.m_maxLambda = 1.0f;
+                srci.m_maxLambda = ys_maxFloat;
                 srci.m_direction = v10;
-                srci.m_origin = x1 + w10 * ysSplat(0.001f); // Hack. Push it out a little to collision with the source shape.
-                
-                ysSceneRayCastOutput srco;
-                bool hit = RayCastClosest(&srco, srci);
-                
-                ysSurfaceData surface0;
-                if (hit)
-                {
-                    surface0.m_shape = m_shapes + srco.m_shapeId.m_index;
-                    surface0.m_material = m_materials + surface0.m_shape->m_materialId.m_index;
-                    surface0.m_posWS = srco.m_hitPoint;
-                    surface0.m_normalWS = srco.m_hitNormal;
-                    surface0.m_tangentWS = srco.m_hitTangent;
-                    surface0.m_incomingDirectionWS = w01;
-                }
-                else
-                {
-                    // Numerically, the ray cast could miss... in principle, it cannot (recall that we generated the cast direction by
-                    // sampling the light's surface). At the very least, the cast should hit the light.
-                    surface0.m_shape = shape0;
-                    surface0.m_material = m_materials + shape0->m_materialId.m_index;
-                    surface0.m_posWS = x0;
-                    surface0.m_normalWS = n0;
-                    surface0.m_tangentWS = frame0.m_tangent;
-                    surface0.m_incomingDirectionWS = w01;
-                }
+                srci.m_origin = x1;
 
-                ysVec4 irradiance = SampleRadiance(surface0, bounceCount + 1, maxBounceCount, sampleLight);
-                ysAssert(ysAllGE3(irradiance, ysVec4_zero));
-                ysBSDF brdf = mat1->EvaluateBRDF(this, w10_LS1, w12_LS1);
-                if (brdf.m_isFinite == false)
+                SingleReflectiveMultipleEmissives srme;
+                sRayCastClosestReflective_CollectEmissives(this, &srme, srci, shape1);
+                if (srme.m_hitReflective || srme.m_emissiveCount > 0)
                 {
-                    // In principle, impossible for unidirectional path tracing to sample specular reflection of a point on an area light.
-                    continue;
-                }
-                ysVec4 radiance = brdf.m_value * irradiance * ysSplat(cos10_1 / pAngle);
-
-                ys_float32 weight;
-                {
-                    ys_float32 numerator = pAngle * pAngle;
-                    ys_float32 denominator = numerator;
-                    for (ys_int32 j = 0; j < m_emissiveShapeCount; ++j)
+                    ysVec4 radiance = sAccumulateDirectRadiance(this, w01, srme.m_emissiveOutputs, srme.m_emissiveCount);
+                
+                    if (srme.m_hitReflective)
                     {
-                        if (j == i)
+                        const ysSceneRayCastOutput &opt = srme.m_reflectiveOutput;
+
+                        ysSurfaceData surface0;
+                        surface0.SetShape(this, opt.m_shapeId);
+                        surface0.m_posWS = opt.m_hitPoint;
+                        surface0.m_normalWS = opt.m_hitNormal;
+                        surface0.m_tangentWS = opt.m_hitTangent;
+                        surface0.m_incomingDirectionWS = w01;
+
+                        ysVec4 incomingRadiance = SampleRadiance(surface0, bounceCount + 1, maxBounceCount, sampleLight);
+                        ysAssert(ysAllGE3(incomingRadiance, ysVec4_zero));
+                        ysBSDF brdf = mat1->EvaluateBRDF(this, w10_LS1, w12_LS1);
+                        if (brdf.m_isFinite == false)
                         {
+                            // In principle, impossible for unidirectional path tracing to sample specular reflection of a point on an area light.
                             continue;
                         }
-                        const ysShape* emissiveShape = m_shapes + m_emissiveShapeIndices[j];
-                        if (emissiveShape == shape1)
+                        radiance += brdf.m_value * incomingRadiance * ysSplat(cos10_1 / pAngle);
+                    }
+
+                    ys_float32 weight;
+                    {
+                        ys_float32 numerator = pAngle * pAngle;
+                        ys_float32 denominator = numerator;
+                        for (ys_int32 j = 0; j < m_emissiveShapeCount; ++j)
                         {
-                            continue;
-                        }
-                
-                        ysRayCastInput rci;
-                        rci.m_maxLambda = ys_maxFloat;
-                        rci.m_direction = w10;
-                        rci.m_origin = x1;
-                
-                        ysRayCastOutput rco;
-                        bool samplingTechniquesOverlap = emissiveShape->RayCast(this, &rco, rci);
-                        if (samplingTechniquesOverlap)
-                        {
-                            ys_float32 pAreaTmp = emissiveShape->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint);
-                            ys_float32 rr = rco.m_lambda * rco.m_lambda;
-                            ys_float32 c = ysDot3(w01, rco.m_hitNormal);
-                            ysAssert(c >= 0.0f);
-                            if (c > ys_epsilon) // Prevent division by zero
+                            if (j == i)
                             {
-                                ys_float32 pAngleTmp = pAreaTmp * rr / c;
-                                denominator += pAngleTmp * pAngleTmp;
+                                continue;
+                            }
+                            const ysShape* emissiveShape = m_shapes + m_emissiveShapeIndices[j];
+                            if (emissiveShape == shape1)
+                            {
+                                continue;
+                            }
+
+                            ysRayCastInput rci;
+                            rci.m_maxLambda = ys_maxFloat;
+                            rci.m_direction = w10;
+                            rci.m_origin = x1;
+
+                            ysRayCastOutput rco;
+                            bool samplingTechniquesOverlap = emissiveShape->RayCast(this, &rco, rci);
+                            if (samplingTechniquesOverlap)
+                            {
+                                ys_float32 pAreaTmp = emissiveShape->ProbabilityDensityForGeneratedPoint(this, rco.m_hitPoint);
+                                ys_float32 rr = rco.m_lambda * rco.m_lambda;
+                                ys_float32 c = ysDot3(w01, rco.m_hitNormal);
+                                ysAssert(c >= 0.0f);
+                                if (c > ys_epsilon) // Prevent division by zero
+                                {
+                                    ys_float32 pAngleTmp = pAreaTmp * rr / c;
+                                    denominator += pAngleTmp * pAngleTmp;
+                                }
                             }
                         }
+
+                        ysDirectionalProbabilityDensity p = mat1->ProbabilityDensityForGeneratedIncomingDirection(this, w10_LS1, w12_LS1);
+                        if (p.m_perSolidAngle.m_isFinite)
+                        {
+                            // In principle, impossible for area light sampling to overlap with sampling singular directional distribution.
+                            denominator += p.m_perSolidAngle.m_value * p.m_perSolidAngle.m_value;
+                        }
+
+                        weight = numerator / denominator;
                     }
 
-                    ysDirectionalProbabilityDensity p = mat1->ProbabilityDensityForGeneratedIncomingDirection(this, w10_LS1, w12_LS1);
-                    if (p.m_perSolidAngle.m_isFinite)
-                    {
-                        // In principle, impossible for area light sampling to overlap with sampling singular directional distribution.
-                        denominator += p.m_perSolidAngle.m_value * p.m_perSolidAngle.m_value;
-                    }
-                
-                    weight = numerator / denominator;
+                    surfaceLitRadiance += ysSplat(weight) * radiance;
                 }
-
-                surfaceLitRadiance += ysSplat(weight) * radiance;
             }
         }
     }
@@ -547,8 +765,20 @@ ysVec4 ysScene::SampleRadiance(const ysSurfaceData& surfaceData, ys_int32 bounce
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct PathVertex
 {
+    void SetShape(const ysScene* scene, const ysShapeId& shapeId)
+    {
+        m_shape = scene->m_shapes + shapeId.m_index;
+        m_material = (m_shape->m_materialId == ys_nullMaterialId)
+            ? nullptr
+            : scene->m_materials + m_shape->m_materialId.m_index;
+        m_emissive = (m_shape->m_emissiveMaterialId == ys_nullEmissiveMaterialId)
+            ? nullptr
+            : scene->m_emissiveMaterials + m_shape->m_emissiveMaterialId.m_index;
+    }
+
     const ysShape* m_shape;
     const ysMaterial* m_material;
+    const ysEmissiveMaterial* m_emissive;
     ysVec4 m_posWS;
     ysVec4 m_normalWS;
     ysVec4 m_tangentWS;
@@ -575,6 +805,7 @@ struct InputEyePathVertex
     {
         pv->m_shape = m_shape;
         pv->m_material = m_material;
+        pv->m_emissive = m_emissive;
         pv->m_posWS = m_posWS;
         pv->m_normalWS = m_normalWS;
         pv->m_tangentWS = m_tangentWS;
@@ -582,6 +813,7 @@ struct InputEyePathVertex
 
     const ysShape* m_shape;
     const ysMaterial* m_material;
+    const ysEmissiveMaterial* m_emissive;
     ysVec4 m_posWS;
     ysVec4 m_normalWS;
     ysVec4 m_tangentWS;
@@ -671,7 +903,6 @@ static ysVec4 sDivide(const ysBSDF& f, const ysProbabilityDensity& p)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubpathInput& input) const
 {
-    const ys_float32 rayCastNudge = 0.001f; // Hack. Push ray cast origins out a little to avoid collision with the source shape.
     const ys_float32 divZeroThresh = ys_epsilon; // Prevent unsafe division.
 
     PathVertex* y = output->m_y;
@@ -723,11 +954,12 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             probArea_L0 /= ys_float32(m_emissiveShapeCount); // Note this division!
             probArea_L0_finite = true; // TODO: Point lights
 
-            const ysMaterial* emissiveMaterial = m_materials + emissiveShape->m_materialId.m_index;
-            emittedIrradiance = emissiveMaterial->EvaluateEmittedIrradiance(this).m_value;
+            const ysEmissiveMaterial* emissiveMaterial = m_emissiveMaterials + emissiveShape->m_emissiveMaterialId.m_index;
+            emittedIrradiance = emissiveMaterial->EvaluateIrradiance(this).m_value;
             LSpatialOverPSpatial0 = emittedIrradiance / ysSplat(probArea_L0);
 
             y[nL].m_material = m_materials + emissiveShape->m_materialId.m_index;
+            y[nL].m_emissive = emissiveMaterial;
             y[nL].m_shape = emissiveShape;
             y[nL].m_posWS = sp.m_point;
             y[nL].m_normalWS = sp.m_normal;
@@ -760,7 +992,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
 
             ysVec4 u12_LS1;
             ysRadiance emittedRadiance;
-            ysDirectionalProbabilityDensity p12 = y1->m_material->GenerateRandomEmission(this, &u12_LS1, &emittedRadiance);
+            ysDirectionalProbabilityDensity p12 = y1->m_emissive->GenerateRandomDirection(this, &u12_LS1, &emittedRadiance);
             ysAssert(u12_LS1.z >= 0.0f);
             if (u12_LS1.z < divZeroThresh)
             {
@@ -790,10 +1022,10 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             ysSceneRayCastInput srci;
             srci.m_maxLambda = ys_maxFloat;
             srci.m_direction = u12;
-            srci.m_origin = y1->m_posWS + u12 * ysSplat(rayCastNudge);
+            srci.m_origin = y1->m_posWS;
 
             ysSceneRayCastOutput srco;
-            bool hit = RayCastClosest(&srco, srci);
+            bool hit = sRayCastClosestReflective(this, &srco, srci, y1->m_shape);
             if (hit == false)
             {
                 break;
@@ -811,8 +1043,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
                 break;
             }
             ysAssert(srco.m_lambda >= 0.0f);
-            ys_float32 d12 = srco.m_lambda + rayCastNudge;
-            ys_float32 d12Sqr = d12 * d12;
+            ys_float32 d12Sqr = srco.m_lambda * srco.m_lambda;
             if (d12Sqr < divZeroThresh)
             {
                 break;
@@ -820,8 +1051,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             y1->m_p[1] = p12;
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
 
-            y2->m_shape = m_shapes + srco.m_shapeId.m_index;
-            y2->m_material = m_materials + y2->m_shape->m_materialId.m_index;
+            y2->SetShape(this, srco.m_shapeId);
             y2->m_posWS = srco.m_hitPoint;
             y2->m_normalWS = srco.m_hitNormal;
             y2->m_tangentWS = srco.m_hitTangent;
@@ -877,10 +1107,10 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             ysSceneRayCastInput srci;
             srci.m_maxLambda = ys_maxFloat;
             srci.m_direction = u12;
-            srci.m_origin = y1->m_posWS + u12 * ysSplat(rayCastNudge);
+            srci.m_origin = y1->m_posWS;
 
             ysSceneRayCastOutput srco;
-            bool hit = RayCastClosest(&srco, srci);
+            bool hit = sRayCastClosestReflective(this, &srco, srci, y1->m_shape);
             if (hit == false)
             {
                 break;
@@ -900,8 +1130,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             }
 
             ysAssert(srco.m_lambda >= 0.0f);
-            ys_float32 d12 = srco.m_lambda + rayCastNudge;
-            ys_float32 d12Sqr = d12 * d12;
+            ys_float32 d12Sqr = srco.m_lambda * srco.m_lambda;
             if (d12Sqr < divZeroThresh)
             {
                 break;
@@ -912,8 +1141,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
             y1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
             y1->m_f = f012;
 
-            y2->m_shape = m_shapes + srco.m_shapeId.m_index;
-            y2->m_material = m_materials + y2->m_shape->m_materialId.m_index;
+            y2->SetShape(this, srco.m_shapeId);
             y2->m_posWS = srco.m_hitPoint;
             y2->m_normalWS = srco.m_hitNormal;
             y2->m_tangentWS = srco.m_hitTangent;
@@ -998,10 +1226,10 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
         ysSceneRayCastInput srci;
         srci.m_maxLambda = ys_maxFloat;
         srci.m_direction = u12;
-        srci.m_origin = z1->m_posWS + u12 * ysSplat(rayCastNudge);
+        srci.m_origin = z1->m_posWS;
 
         ysSceneRayCastOutput srco;
-        bool hit = RayCastClosest(&srco, srci);
+        bool hit = sRayCastClosestReflective(this, &srco, srci, z1->m_shape);
         if (hit == false)
         {
             break;
@@ -1021,8 +1249,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
         }
 
         ysAssert(srco.m_lambda >= 0.0f);
-        ys_float32 d12 = srco.m_lambda + rayCastNudge;
-        ys_float32 d12Sqr = d12 * d12;
+        ys_float32 d12Sqr = srco.m_lambda * srco.m_lambda;
         if (d12Sqr < divZeroThresh)
         {
             break;
@@ -1033,8 +1260,7 @@ void ysScene::GenerateSubpaths(GenerateSubpathOutput* output, const GenerateSubp
         z1->m_projToArea1 = u12_LS1.z * u21_LS2.z / d12Sqr;
         z1->m_f = f210;
 
-        z2->m_shape = m_shapes + srco.m_shapeId.m_index;
-        z2->m_material = m_materials + z2->m_shape->m_materialId.m_index;
+        z2->SetShape(this, srco.m_shapeId);
         z2->m_posWS = srco.m_hitPoint;
         z2->m_normalWS = srco.m_hitNormal;
         z2->m_tangentWS = srco.m_hitTangent;
@@ -1125,15 +1351,13 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
             return ysVec4_zero;
         }
 
-        ys_float32 d12 = ysLength3(v12);
-
         ysSceneRayCastInput srci;
-        srci.m_origin = x1->m_posWS + u12 * ysSplat(rayCastNudge);
+        srci.m_origin = x1->m_posWS;
         srci.m_direction = v12;
-        srci.m_maxLambda = (d12 - rayCastNudge) / d12;
+        srci.m_maxLambda = 1.0f;
 
         ysSceneRayCastOutput srco;
-        bool hit = RayCastClosest(&srco, srci);
+        bool hit = sRayCastClosestReflective(this, &srco, srci, x1->m_shape);
         if (hit)
         {
             ysShape* hitShape = m_shapes + srco.m_shapeId.m_index;
@@ -1150,10 +1374,10 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
 
         if (s == 1)
         {
-            ysAssert(x1->m_material->IsEmissive(this));
-            ysIrradiance LSpatial = x1->m_material->EvaluateEmittedIrradiance(this);
-            ysRadiance L = x1->m_material->EvaluateEmittedRadiance(this, u12_LS1);
-            x1->m_p[1] = x1->m_material->ProbabilityDensityForGeneratedEmission(this, u12_LS1);
+            ysAssert(x1->m_emissive != nullptr);
+            ysIrradiance LSpatial = x1->m_emissive->EvaluateIrradiance(this);
+            ysRadiance L = x1->m_emissive->EvaluateRadiance(this, u12_LS1);
+            x1->m_p[1] = x1->m_emissive->ProbabilityDensityForGeneratedDirection(this, u12_LS1);
             x1->m_f.m_value = L.m_value / LSpatial.m_value;
             x1->m_f.m_isFinite = L.m_isFinite;
         }
@@ -1198,7 +1422,7 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysAssert(t >= 2);
 
         PathVertex* x2 = z + (t - 1);
-        if (x2->m_material->IsEmissive(this) == false)
+        if (x2->m_emissive == nullptr)
         {
             return ysVec4_zero;
         }
@@ -1216,9 +1440,9 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
         ysVec4 v23 = x3->m_posWS - x2->m_posWS;
         ysVec4 u23 = ysNormalize3(v23);
         ysVec4 u23_LS2 = ysMulT33(R2, u23);
-        x2->m_p[0] = x2->m_material->ProbabilityDensityForGeneratedEmission(this, u23_LS2);
-        ysIrradiance LSpatial = x2->m_material->EvaluateEmittedIrradiance(this);
-        ysRadiance L = x2->m_material->EvaluateEmittedRadiance(this, u23_LS2);
+        x2->m_p[0] = x2->m_emissive->ProbabilityDensityForGeneratedDirection(this, u23_LS2);
+        ysIrradiance LSpatial = x2->m_emissive->EvaluateIrradiance(this);
+        ysRadiance L = x2->m_emissive->EvaluateRadiance(this, u23_LS2);
         if (L.m_isFinite == false)
         {
             // Sampling the directionally-specular emission has zero probability in principle.
@@ -1639,23 +1863,32 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
     rci.m_direction = pixelDirWS;
     rci.m_origin = input.m_eye.p;
 
-    ysSceneRayCastOutput rco;
-    bool hit = RayCastClosest(&rco, rci);
-
     ysVec4 pixelValue = ysVec4_zero;
     switch (input.m_renderMode)
     {
         case ysSceneRenderInput::RenderMode::e_regular:
         {
-            ysVec4 radiance = ysVec4_zero;
-            if (hit)
+            SingleReflectiveMultipleEmissives srme;
+            sRayCastClosestReflective_CollectEmissives(this, &srme, rci, ys_nullShapeId);
+
+            ysVec4 nPixelDirWS = ysNormalize3(pixelDirWS);
+
+            ysVec4 radiance = sAccumulateDirectRadiance(this, -nPixelDirWS, srme.m_emissiveOutputs, srme.m_emissiveCount);
+
+            if (srme.m_hitReflective)
             {
-                const ysShape* shape = m_shapes + rco.m_shapeId.m_index;
+                const ysSceneRayCastOutput& mainOutput = srme.m_reflectiveOutput;
+
+                const ysShape* shape = m_shapes + mainOutput.m_shapeId.m_index;
                 const ysMaterial* material = m_materials + shape->m_materialId.m_index;
+                const ysEmissiveMaterial* emissive = (shape->m_emissiveMaterialId == ys_nullEmissiveMaterialId)
+                    ? nullptr
+                    : m_emissiveMaterials + shape->m_emissiveMaterialId.m_index;
 
                 ysAssert(input.m_giInput != nullptr);
                 switch (input.m_giInput->m_type)
                 {
+
                     case ysGlobalIlluminationInput::Type::e_uniDirectional:
                     {
                         const ysGlobalIlluminationInput_UniDirectional* giInput
@@ -1664,10 +1897,11 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
                         ysSurfaceData surfaceData;
                         surfaceData.m_shape = shape;
                         surfaceData.m_material = material;
-                        surfaceData.m_posWS = rco.m_hitPoint;
-                        surfaceData.m_normalWS = rco.m_hitNormal;
-                        surfaceData.m_tangentWS = rco.m_hitTangent;
-                        surfaceData.m_incomingDirectionWS = -ysNormalize3(pixelDirWS);
+                        surfaceData.m_emissive = emissive;
+                        surfaceData.m_posWS = mainOutput.m_hitPoint;
+                        surfaceData.m_normalWS = mainOutput.m_hitNormal;
+                        surfaceData.m_tangentWS = mainOutput.m_hitTangent;
+                        surfaceData.m_incomingDirectionWS = -nPixelDirWS;
 
                         // To be precise, what we should actually accumulate here is...
                         //     radiance += Irradiance / wproj_pixel = (SampleRadiance / (dP/dwproj)) / wproj_pixel
@@ -1698,9 +1932,10 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
 
                         args.eyePathVertex1.m_shape = shape;
                         args.eyePathVertex1.m_material = material;
-                        args.eyePathVertex1.m_posWS = rco.m_hitPoint;
-                        args.eyePathVertex1.m_normalWS = rco.m_hitNormal;
-                        args.eyePathVertex1.m_tangentWS = rco.m_hitTangent;
+                        args.eyePathVertex1.m_emissive = emissive;
+                        args.eyePathVertex1.m_posWS = mainOutput.m_hitPoint;
+                        args.eyePathVertex1.m_normalWS = mainOutput.m_hitNormal;
+                        args.eyePathVertex1.m_tangentWS = mainOutput.m_hitTangent;
 
                         args.WSpatialOverPSpatial0 = ysVec4_one;
                         args.WDirectionalOverPDirectional01 = ysVec4_one;
@@ -1728,12 +1963,16 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
         }
         case ysSceneRenderInput::RenderMode::e_normals:
         {
+            ysSceneRayCastOutput rco;
+            bool hit = m_bvh.RayCastClosest(this, &rco, rci);
             ysVec4 normalColor = hit ? (rco.m_hitNormal + ysVec4_one) * ysVec4_half : ysVec4_zero;
             pixelValue = normalColor;
             break;
         }
         case ysSceneRenderInput::RenderMode::e_depth:
         {
+            ysSceneRayCastOutput rco;
+            bool hit = m_bvh.RayCastClosest(this, &rco, rci);
             ys_float32 depth = hit ? rco.m_lambda * ysLength3(pixelDirWS) : -1.0f;
             pixelValue = ysSplat(depth);
             break;

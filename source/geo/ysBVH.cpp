@@ -648,6 +648,75 @@ bool ysBVH::RayCastClosest(const ysScene* scene, ysSceneRayCastOutput* output, c
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysBVH::RayCast(const ysScene* scene, const ysSceneRayCastInput& input, void* dat, ysRayCastFlowControlFunction fcn) const
+{
+    ysRayCastInput rci;
+    rci.m_origin = input.m_origin;
+    rci.m_direction = input.m_direction;
+    rci.m_maxLambda = input.m_maxLambda;
+
+    const ys_int32 k_stackSize = 256;
+    ysAssert(m_depth < k_stackSize);
+    ys_int32 nodeIndexStack[k_stackSize];
+    nodeIndexStack[0] = 0;
+    ys_int32 stackCount = 1;
+    while (stackCount > 0)
+    {
+        stackCount--;
+        const Node* node = m_nodes + nodeIndexStack[stackCount];
+        ysRay ray;
+        ray.m_origin = rci.m_origin;
+        ray.m_direction = rci.m_direction;
+        bool rayIntersectsNode = node->m_aabb.IntersectsRay(ray, rci.m_maxLambda);
+        if (rayIntersectsNode == false)
+        {
+            continue;
+        }
+
+        ysAssert((node->m_left == ys_nullIndex) == (node->m_right == ys_nullIndex));
+        if (node->m_left != ys_nullIndex)
+        {
+            ysAssert(node->m_shapeId == ys_nullShapeId);
+            nodeIndexStack[stackCount] = node->m_left;
+            stackCount++;
+            nodeIndexStack[stackCount] = node->m_right;
+            stackCount++;
+        }
+        else
+        {
+            ysAssert(node->m_shapeId != ys_nullShapeId);
+            const ysShape& shape = scene->m_shapes[node->m_shapeId.m_index];
+            ysRayCastOutput rco;
+            bool hit = shape.RayCast(scene, &rco, rci);
+            if (hit)
+            {
+                ysSceneRayCastOutput srco;
+                srco.m_hitPoint = rco.m_hitPoint;
+                srco.m_hitNormal = rco.m_hitNormal;
+                srco.m_hitTangent = rco.m_hitTangent;
+                srco.m_lambda = rco.m_lambda;
+                srco.m_shapeId = node->m_shapeId;
+                ysRayCastFlowControlCode code = fcn(srco, dat);
+                switch (code)
+                {
+                    case ysRayCastFlowControlCode::e_stop:
+                        return;
+                    case ysRayCastFlowControlCode::e_continue:
+                        continue;
+                    case ysRayCastFlowControlCode::e_clip:
+                        rci.m_maxLambda = rco.m_lambda;
+                        continue;
+                    default:
+                        ysAssert(false);
+                        return;
+                }
+            }
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysBVH::DebugDraw(const ysDrawInputBVH& input) const
 {
     Color color = Color(1.0f, 1.0f, 1.0f, 1.0f);

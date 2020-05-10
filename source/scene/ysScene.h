@@ -11,6 +11,8 @@
 struct ysDrawInputGeo;
 struct ysLight;
 struct ysLightPoint;
+struct ysEmissiveMaterial;
+struct ysEmissiveMaterialUniform;
 struct ysMaterial;
 struct ysMaterialMirror;
 struct ysMaterialStandard;
@@ -37,8 +39,6 @@ struct ysScene
     void Create(const ysSceneDef&);
     void Destroy();
 
-    bool RayCastClosest(ysSceneRayCastOutput*, const ysSceneRayCastInput&) const;
-
     ysVec4 SampleRadiance(const ysSurfaceData&, ys_int32 bounceCount, ys_int32 maxBounceCount, bool sampleLight) const;
 
     struct GenerateSubpathInput;
@@ -58,11 +58,19 @@ struct ysScene
 
     ysBVH m_bvh;
 
+    ////////////
+    // Shapes //
+    ////////////
+
     ysShape* m_shapes;
     ys_int32 m_shapeCount;
 
     ysTriangle* m_triangles;
     ys_int32 m_triangleCount;
+
+    //////////////////////////
+    // Reflective Materials //
+    //////////////////////////
 
     ysMaterial* m_materials;
     ys_int32 m_materialCount;
@@ -73,12 +81,27 @@ struct ysScene
     ysMaterialMirror* m_materialMirrors;
     ys_int32 m_materialMirrorCount;
 
+    ////////////////////////
+    // Emissive Materials //
+    ////////////////////////
+
+    ysEmissiveMaterial* m_emissiveMaterials;
+    ys_int32 m_emissiveMaterialCount;
+
+    ysEmissiveMaterialUniform* m_emissiveMaterialUniforms;
+    ys_int32 m_emissiveMaterialUniformCount;
+
+    ////////////////////////////////////////////////
+    // Lights with infinitesimal or infinite area //
+    ////////////////////////////////////////////////
+
     ysLight* m_lights;
     ys_int32 m_lightCount;
 
     ysLightPoint* m_lightPoints;
     ys_int32 m_lightPointCount;
 
+    // These are for quickly iterating over all area light sources
     ys_int32* m_emissiveShapeIndices;
     ys_int32 m_emissiveShapeCount;
     
