@@ -530,7 +530,7 @@ static void sCreateScene()
     {
         triangles[2 * 0 + 0].m_materialType = ysMaterialType::e_mirror;
         triangles[2 * 0 + 0].m_materialTypeIndex = 0;
-
+    
         triangles[2 * 1 + 0].m_materialType = ysMaterialType::e_mirror;
         triangles[2 * 1 + 0].m_materialTypeIndex = 0;
     }
@@ -544,31 +544,33 @@ static void sCreateScene()
     triangles[10].m_twoSided = true;
     triangles[10].m_materialType = ysMaterialType::e_standard;
     triangles[10].m_materialTypeIndex = 4;
+    triangles[10].m_emissiveMaterialType = ysEmissiveMaterialType::e_uniform;
+    triangles[10].m_emissiveMaterialTypeIndex = 0;
     triangles[11].m_vertices[0] = ysVecSet(-qwer, -qwer, asdf2) * ysSplat(h);
     triangles[11].m_vertices[1] = ysVecSet(qwer, qwer, asdf2) * ysSplat(h);
     triangles[11].m_vertices[2] = ysVecSet(-qwer, qwer, asdf2) * ysSplat(h);
     triangles[11].m_twoSided = true;
     triangles[11].m_materialType = ysMaterialType::e_standard;
     triangles[11].m_materialTypeIndex = 4;
+    triangles[11].m_emissiveMaterialType = ysEmissiveMaterialType::e_uniform;
+    triangles[11].m_emissiveMaterialTypeIndex = 0;
 
     ysMaterialStandardDef materialStandards[5];
     materialStandards[0].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[0].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[0].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[1].m_albedoDiffuse = ysVecSet(1.0f, 0.25f, 0.25f);
     materialStandards[1].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[1].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[2].m_albedoDiffuse = ysVecSet(0.25f, 0.25f, 1.0f);
     materialStandards[2].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[2].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[3].m_albedoDiffuse = ysVecSet(0.25f, 1.0f, 0.25f);
     materialStandards[3].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[3].m_emissiveDiffuse = ysVecSet(0.0f, 0.0f, 0.0f);
     materialStandards[4].m_albedoDiffuse = ysVecSet(1.0f, 1.0f, 1.0f);
     materialStandards[4].m_albedoSpecular = ysVecSet(0.0f, 0.0f, 0.0f);
-    materialStandards[4].m_emissiveDiffuse = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
     ysMaterialMirrorDef materialMirrors[1];
+
+    ysEmissiveMaterialUniformDef emissiveUniforms[1];
+    emissiveUniforms[0].m_radiance = ysVecSet(1.0f, 1.0f, 1.0f) * ysSplat(1.0f);
 
     ysLightPointDef lightPoints[1];
     lightPoints[0].m_position = ysVecSet(0.0f, 0.0f, 0.9f) * ysSplat(h);
@@ -581,6 +583,8 @@ static void sCreateScene()
     sceneDef.m_materialStandardCount = 5;
     sceneDef.m_materialMirrors = materialMirrors;
     sceneDef.m_materialMirrorCount = 1;
+    sceneDef.m_emissiveMaterialUniforms = emissiveUniforms;
+    sceneDef.m_emissiveMaterialUniformCount = 1;
     sceneDef.m_lightPoints = lightPoints;
     sceneDef.m_lightPointCount = 0;
 

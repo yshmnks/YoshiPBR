@@ -34,4 +34,5 @@ struct ysShape
     ys_int32 m_typeIndex;
 
     ysMaterialId m_materialId;
+    ysEmissiveMaterialId m_emissiveMaterialId;
 };
