@@ -22,6 +22,7 @@ struct ysShape
 {
     enum Type
     {
+        e_ellipsoid,
         e_triangle,
     };
 

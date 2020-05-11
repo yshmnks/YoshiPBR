@@ -25,6 +25,7 @@ struct ysSceneRenderInput;
 struct ysSceneRenderOutput;
 struct ysRay;
 struct ysShape;
+struct ysEllipsoid;
 struct ysTriangle;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,6 +65,9 @@ struct ysScene
 
     ysShape* m_shapes;
     ys_int32 m_shapeCount;
+
+    ysEllipsoid* m_ellipsoids;
+    ys_int32 m_ellipsoidCount;
 
     ysTriangle* m_triangles;
     ys_int32 m_triangleCount;

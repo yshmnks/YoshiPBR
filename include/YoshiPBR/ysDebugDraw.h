@@ -35,4 +35,7 @@ struct ysDebugDraw
 
     virtual void DrawWireBox(const ysVec4& halfDimensions, const ysTransform&, const Color&);
     virtual void DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&);
+
+    virtual void DrawBox(const ysVec4& halfDimensions, const ysTransform&, const Color&);
+    virtual void DrawEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&);
 };

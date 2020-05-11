@@ -472,6 +472,13 @@ static void sCreateScene()
         }
     }
 
+    ysEllipsoidDef ellipsoids[1];
+    ellipsoids[0].m_transform.p = ysVecSet(0.0f, 0.0f, 0.0f);
+    ellipsoids[0].m_transform.q = ysQuatFromAxisAngle(ysVecSet(0.0f, 1.0f, 0.0f), ys_pi * 0.25f);
+    ellipsoids[0].m_radii = ysVecSet(1.0f, 2.0f, 3.0f);
+    ellipsoids[0].m_materialType = ysMaterialType::e_mirror;
+    ellipsoids[0].m_materialTypeIndex = 0;
+
     ysInputTriangle triangles[12];
     ys_int32 wallIdx = 0;
     triangles[2 * wallIdx + 0].m_vertices[0] = corners[0][0][0];
@@ -527,13 +534,13 @@ static void sCreateScene()
     triangles[2 * 4 + 1].m_materialTypeIndex = 3;
 
     // Make some triangles mirrors
-    {
-        triangles[2 * 0 + 0].m_materialType = ysMaterialType::e_mirror;
-        triangles[2 * 0 + 0].m_materialTypeIndex = 0;
-    
-        triangles[2 * 1 + 0].m_materialType = ysMaterialType::e_mirror;
-        triangles[2 * 1 + 0].m_materialTypeIndex = 0;
-    }
+    //{
+    //    triangles[2 * 0 + 0].m_materialType = ysMaterialType::e_mirror;
+    //    triangles[2 * 0 + 0].m_materialTypeIndex = 0;
+    //
+    //    triangles[2 * 1 + 0].m_materialType = ysMaterialType::e_mirror;
+    //    triangles[2 * 1 + 0].m_materialTypeIndex = 0;
+    //}
 
     const ys_float32 asdf = 0.8f;
     const ys_float32 qwer = 0.5f;
@@ -577,6 +584,8 @@ static void sCreateScene()
     lightPoints[0].m_wattage = ysSplat(100.0f);
 
     ysSceneDef sceneDef;
+    sceneDef.m_ellipsoids = ellipsoids;
+    sceneDef.m_ellipsoidCount = 1;
     sceneDef.m_triangles = triangles;
     sceneDef.m_triangleCount = 12;
     sceneDef.m_materialStandards = materialStandards;

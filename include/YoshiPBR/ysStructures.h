@@ -90,6 +90,12 @@ struct ysShapeDef
     ys_int32 m_emissiveMaterialTypeIndex;
 };
 
+struct ysEllipsoidDef : public ysShapeDef
+{
+    ysTransform m_transform;
+    ysVec4 m_radii;
+};
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysInputTriangle : public ysShapeDef
@@ -134,6 +140,9 @@ struct ysSceneDef
 {
     ysSceneDef()
     {
+        m_ellipsoids = nullptr;
+        m_ellipsoidCount = 0;
+
         m_triangles = nullptr;
         m_triangleCount = 0;
 
@@ -153,6 +162,9 @@ struct ysSceneDef
     ////////////
     // Shapes //
     ////////////
+
+    const ysEllipsoidDef* m_ellipsoids;
+    ys_int32 m_ellipsoidCount;
 
     const ysInputTriangle* m_triangles;
     ys_int32 m_triangleCount;

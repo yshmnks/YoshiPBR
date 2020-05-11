@@ -7,6 +7,7 @@
 #include "mat/reflective/ysMaterial.h"
 #include "mat/reflective/ysMaterialMirror.h"
 #include "mat/reflective/ysMaterialStandard.h"
+#include "YoshiPBR/ysEllipsoid.h"
 #include "YoshiPBR/ysLock.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
@@ -187,6 +188,7 @@ void ysScene::Reset()
 {
     m_bvh.Reset();
     m_shapes = nullptr;
+    m_ellipsoids = nullptr;
     m_triangles = nullptr;
     m_materials = nullptr;
     m_materialStandards = nullptr;
@@ -197,6 +199,7 @@ void ysScene::Reset()
     m_lightPoints = nullptr;
     m_emissiveShapeIndices = nullptr;
     m_shapeCount = 0;
+    m_ellipsoidCount = 0;
     m_triangleCount = 0;
     m_materialCount = 0;
     m_materialStandardCount = 0;
@@ -214,8 +217,11 @@ void ysScene::Reset()
 void ysScene::Create(const ysSceneDef& def)
 {
     {
-        m_shapeCount = def.m_triangleCount;
+        m_shapeCount = def.m_ellipsoidCount + def.m_triangleCount;
         m_shapes = static_cast<ysShape*>(ysMalloc(sizeof(ysShape) * m_shapeCount));
+
+        m_ellipsoidCount = def.m_ellipsoidCount;
+        m_ellipsoids = static_cast<ysEllipsoid*>(ysMalloc(sizeof(ysEllipsoid) * m_ellipsoidCount));
 
         m_triangleCount = def.m_triangleCount;
         m_triangles = static_cast<ysTriangle*>(ysMalloc(sizeof(ysTriangle) * m_triangleCount));
@@ -257,59 +263,84 @@ void ysScene::Create(const ysSceneDef& def)
     // Shapes //
     ////////////
 
-    ys_int32 shapeIdx = 0;
-
-    ysAABB* aabbs = static_cast<ysAABB*>(ysMalloc(sizeof(ysAABB) * m_shapeCount));
-    ysShapeId* shapeIds = static_cast<ysShapeId*>(ysMalloc(sizeof(ysShapeId) * m_shapeCount));
-
-    for (ys_int32 i = 0; i < m_triangleCount; ++i, ++shapeIdx)
+    auto SetShapeMaterialIds = [&](ysShape* shape, const ysShapeDef* def)
     {
-        ysTriangle* dstTriangle = m_triangles + i;
-        const ysInputTriangle* srcTriangle = def.m_triangles + i;
-        dstTriangle->m_v[0] = srcTriangle->m_vertices[0];
-        dstTriangle->m_v[1] = srcTriangle->m_vertices[1];
-        dstTriangle->m_v[2] = srcTriangle->m_vertices[2];
-        ysVec4 ab = dstTriangle->m_v[1] - dstTriangle->m_v[0];
-        ysVec4 ac = dstTriangle->m_v[2] - dstTriangle->m_v[0];
-        ysVec4 ab_x_ac = ysCross(ab, ac);
-        dstTriangle->m_n = ysIsSafeToNormalize3(ab_x_ac) ? ysNormalize3(ab_x_ac) : ysVec4_zero;
-        dstTriangle->m_t = ysIsSafeToNormalize3(ab) ? ysNormalize3(ab) : ysVec4_zero; // TODO...
-        dstTriangle->m_twoSided = srcTriangle->m_twoSided;
-
-        ysShape* shape = m_shapes + shapeIdx;
-        shape->m_type = ysShape::Type::e_triangle;
-        shape->m_typeIndex = i;
-
-        switch (srcTriangle->m_materialType)            
+        switch (def->m_materialType)
         {
             case ysMaterialType::e_none:
                 shape->m_materialId = ys_nullMaterialId;
                 break;
             case ysMaterialType::e_standard:
-                shape->m_materialId.m_index = materialStandardStartIdx + srcTriangle->m_materialTypeIndex;
+                shape->m_materialId.m_index = materialStandardStartIdx + def->m_materialTypeIndex;
                 break;
             case ysMaterialType::e_mirror:
-                shape->m_materialId.m_index = materialMirrorStartIdx + srcTriangle->m_materialTypeIndex;
+                shape->m_materialId.m_index = materialMirrorStartIdx + def->m_materialTypeIndex;
                 break;
             default:
                 ysAssert(false);
                 break;
         }
 
-        switch (srcTriangle->m_emissiveMaterialType)
+        switch (def->m_emissiveMaterialType)
         {
             case ysEmissiveMaterialType::e_none:
                 shape->m_emissiveMaterialId = ys_nullEmissiveMaterialId;
                 break;
             case ysEmissiveMaterialType::e_uniform:
-                shape->m_emissiveMaterialId.m_index = emissiveMaterialUniformStartIdx + srcTriangle->m_emissiveMaterialTypeIndex;
+                shape->m_emissiveMaterialId.m_index = emissiveMaterialUniformStartIdx + def->m_emissiveMaterialTypeIndex;
                 break;
             default:
                 ysAssert(false);
                 break;
         }
+    };
 
-        aabbs[shapeIdx] = dstTriangle->ComputeAABB();
+    ys_int32 shapeIdx = 0;
+
+    ysAABB* aabbs = static_cast<ysAABB*>(ysMalloc(sizeof(ysAABB) * m_shapeCount));
+    ysShapeId* shapeIds = static_cast<ysShapeId*>(ysMalloc(sizeof(ysShapeId) * m_shapeCount));
+
+    for (ys_int32 i = 0; i < m_ellipsoidCount; ++i, ++shapeIdx)
+    {
+        ysEllipsoid* dst = m_ellipsoids + i;
+        const ysEllipsoidDef& src = def.m_ellipsoids[i];
+        dst->m_xf = src.m_transform;
+        dst->m_s = src.m_radii;
+        dst->m_sInv.x = ysSafeReciprocal(dst->m_s.x);
+        dst->m_sInv.y = ysSafeReciprocal(dst->m_s.y);
+        dst->m_sInv.z = ysSafeReciprocal(dst->m_s.z);
+
+        ysShape* shape = m_shapes + shapeIdx;
+        shape->m_type = ysShape::Type::e_ellipsoid;
+        shape->m_typeIndex = i;
+
+        SetShapeMaterialIds(shape, &src);
+
+        aabbs[shapeIdx] = dst->ComputeAABB();
+        shapeIds[shapeIdx].m_index = shapeIdx;
+    }
+
+    for (ys_int32 i = 0; i < m_triangleCount; ++i, ++shapeIdx)
+    {
+        ysTriangle* dst = m_triangles + i;
+        const ysInputTriangle& src = def.m_triangles[i];
+        dst->m_v[0] = src.m_vertices[0];
+        dst->m_v[1] = src.m_vertices[1];
+        dst->m_v[2] = src.m_vertices[2];
+        ysVec4 ab = dst->m_v[1] - dst->m_v[0];
+        ysVec4 ac = dst->m_v[2] - dst->m_v[0];
+        ysVec4 ab_x_ac = ysCross(ab, ac);
+        dst->m_n = ysIsSafeToNormalize3(ab_x_ac) ? ysNormalize3(ab_x_ac) : ysVec4_zero;
+        dst->m_t = ysIsSafeToNormalize3(ab) ? ysNormalize3(ab) : ysVec4_zero; // TODO...
+        dst->m_twoSided = src.m_twoSided;
+
+        ysShape* shape = m_shapes + shapeIdx;
+        shape->m_type = ysShape::Type::e_triangle;
+        shape->m_typeIndex = i;
+        
+        SetShapeMaterialIds(shape, &src);
+
+        aabbs[shapeIdx] = dst->ComputeAABB();
         shapeIds[shapeIdx].m_index = shapeIdx;
     }
 
@@ -431,16 +462,24 @@ void ysScene::Destroy()
 
     m_bvh.Destroy();
     ysSafeFree(m_shapes);
+    ysSafeFree(m_ellipsoids);
     ysSafeFree(m_triangles);
     ysSafeFree(m_materials);
     ysSafeFree(m_materialStandards);
+    ysSafeFree(m_materialMirrors);
+    ysSafeFree(m_emissiveMaterials);
+    ysSafeFree(m_emissiveMaterialUniforms);
     ysSafeFree(m_lights);
     ysSafeFree(m_lightPoints);
     ysSafeFree(m_emissiveShapeIndices);
     m_shapeCount = 0;
+    m_ellipsoidCount = 0;
     m_triangleCount = 0;
     m_materialCount = 0;
     m_materialStandardCount = 0;
+    m_materialMirrorCount = 0;
+    m_emissiveMaterialCount = 0;
+    m_emissiveMaterialUniformCount = 0;
     m_lightCount = 0;
     m_lightPointCount = 0;
     m_emissiveShapeCount = 0;
@@ -2205,6 +2244,13 @@ void ysScene::DebugDrawGeo(const ysDrawInputGeo& input) const
         c[1] = c[0];
         c[2] = c[1];
         input.debugDraw->DrawSegmentList(&segments[0][0], c, 3);
+    }
+
+    for (ys_int32 i = 0; i < m_ellipsoidCount; ++i)
+    {
+        const ysEllipsoid& ellipsoid = m_ellipsoids[i];
+        input.debugDraw->DrawEllipsoid(ellipsoid.m_s, ellipsoid.m_xf, Color(0.0f, 1.0f, 0.0f));
+        input.debugDraw->DrawWireEllipsoid(ellipsoid.m_s, ellipsoid.m_xf, Color(1.0f, 1.0f, 1.0f));
     }
 }
 

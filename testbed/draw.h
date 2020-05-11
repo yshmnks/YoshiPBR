@@ -7,6 +7,7 @@ struct GLFWwindow;
 struct GLRenderLines;
 struct GLRenderTriangles;
 struct GLRenderPrimitiveLines;
+struct GLRenderPrimitiveTriangles;
 struct GLRenderTexturedQuads;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,8 +33,11 @@ struct DebugDraw : public ysDebugDraw
     virtual void DrawSegmentList(const ysVec4* vertices, const Color* colors, ys_int32 segmentCount) override;
     virtual void DrawTriangleList(const ysVec4* vertices, const Color* colors, ys_int32 triangleCount) override;
 
-    virtual void DrawWireBox(const ysVec4& halfDimensions , const ysTransform&, const Color& color) override;
+    virtual void DrawWireBox(const ysVec4& halfDimensions, const ysTransform&, const Color&) override;
     virtual void DrawWireEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&) override;
+
+    virtual void DrawBox(const ysVec4& halfDimensions, const ysTransform&, const Color&) override;
+    virtual void DrawEllipsoid(const ysVec4& halfDimensions, const ysTransform&, const Color&) override;
 
     void DrawTexturedQuad(const Texture2D&, ys_float32 xWidth, ys_float32 yHeight, const ysTransform&, bool useDepthTest, bool useAlphaAsCutout);
 
@@ -43,6 +47,7 @@ struct DebugDraw : public ysDebugDraw
     GLRenderTriangles* m_triangles;
 
     GLRenderPrimitiveLines* m_primLines;
+    GLRenderPrimitiveTriangles* m_primTriangles;
 
     GLRenderTexturedQuads* m_texturedQuads;
 };

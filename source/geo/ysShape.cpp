@@ -1,4 +1,5 @@
 #include "YoshiPBR/ysShape.h"
+#include "YoshiPBR/ysEllipsoid.h"
 #include "YoshiPBR/ysTriangle.h"
 #include "scene/ysScene.h"
 
@@ -12,6 +13,11 @@ ysAABB ysShape::ComputeAABB(const ysScene* scene) const
         {
             const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
             return triangle.ComputeAABB();
+        }
+        case Type::e_ellipsoid:
+        {
+            const ysEllipsoid& ellipsoid = scene->m_ellipsoids[m_typeIndex];
+            return ellipsoid.ComputeAABB();
         }
         default:
         {
@@ -34,6 +40,11 @@ bool ysShape::RayCast(const ysScene* scene, ysRayCastOutput* output, const ysRay
             const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
             return triangle.RayCast(output, input);
         }
+        case Type::e_ellipsoid:
+        {
+            const ysEllipsoid& ellipsoid = scene->m_ellipsoids[m_typeIndex];
+            return ellipsoid.RayCast(output, input);
+        }
         default:
             ysAssert(false);
             return false;
@@ -50,6 +61,12 @@ void ysShape::GenerateRandomSurfacePoint(const ysScene* scene, ysSurfacePoint* p
         {
             const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
             triangle.GenerateRandomSurfacePoint(point, probabilityDensity);
+            break;
+        }
+        case Type::e_ellipsoid:
+        {
+            const ysEllipsoid& ellipsoid = scene->m_ellipsoids[m_typeIndex];
+            ellipsoid.GenerateRandomSurfacePoint(point, probabilityDensity);
             break;
         }
         default:
@@ -69,6 +86,12 @@ ys_float32 ysShape::ProbabilityDensityForGeneratedPoint(const ysScene* scene, co
         {
             const ysTriangle& triangle = scene->m_triangles[m_typeIndex];
             probDens = triangle.ProbabilityDensityForGeneratedPoint(point);
+            break;
+        }
+        case Type::e_ellipsoid:
+        {
+            const ysEllipsoid& ellipsoid = scene->m_ellipsoids[m_typeIndex];
+            probDens = ellipsoid.ProbabilityDensityForGeneratedPoint(point);
             break;
         }
         default:
