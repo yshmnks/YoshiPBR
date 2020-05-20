@@ -31,6 +31,16 @@ set(YOSHIPBR_SOURCE_FILES
     scene/ysRender.h
     scene/ysScene.cpp
     scene/ysScene.h
+    threading/ysJob.cpp
+    threading/ysJob.h
+    threading/ysJobPool.cpp
+    threading/ysJobPool.h
+    threading/ysJobQueue.cpp
+    threading/ysJobQueue.h
+    threading/ysWorker.cpp
+    threading/ysWorker.h
+    threading/ysWorkerManager.cpp
+    threading/ysWorkerManager.h
     )
 
 set(YOSHIPBR_HEADER_FILES
@@ -56,7 +66,7 @@ target_include_directories(YoshiPBR PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../includ
 target_include_directories(YoshiPBR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(YoshiPBR PRIVATE -W4 -WX)
 set_target_properties(YoshiPBR PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
 )

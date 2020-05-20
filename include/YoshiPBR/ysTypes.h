@@ -18,6 +18,14 @@
         __debugbreak();	\
     }
 
+#if ysDEBUG_BUILD
+    #define ysAssertDebug(x) ysAssert(x)
+#else
+    #define ysAssertDebug(x)
+#endif
+
+#define ysAssertCompile(x) static_assert(x, #x)
+
 // TODO: How to do aligned new? Use placement new?
 #define ysNew new
 #define ysDelete(x) delete x
