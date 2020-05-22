@@ -15,6 +15,8 @@ struct ysWorker
 
     };
 
+    void Reset();
+
     void Submit(ysJob* job);
     void Wait(ysWorkerManager*, ysJob* job);
 

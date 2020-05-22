@@ -19,7 +19,7 @@ struct ysJobQueue
     bool Push(ysJob*);
     ysJob* Pop();
 
-    // Steal should only be called from a thread that does NOT own this queue
+    // Steal can be called from any thread.
     ysJob* Steal();
 
     ysJob* m_jobs[ysJOBQUEUE_CAPACITY];

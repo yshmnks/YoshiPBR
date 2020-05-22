@@ -77,9 +77,8 @@ ysJob* ysJobQueue::Pop()
     //   - Pop observes no jobs remaining: This observation by Pop always reflects reality, since jobs are only ever Pushed from the same
     //     thread. So Pop should simply fails to acquire a job.
     // To make all of this more concrete we provide the following illustration for the relation between Pop, {A}, and {B}:
-    // ... Let m be the actual head initially stored in memory
-    // ... Let n be the actual tail initially stored in memory
-    // ... Let s be the number of Steals that succeed before Pop reads head, such that Pop perceives head as m+s
+    // ... Let [m, n] be the actual [head, tail] initially stored in memory when Pop read-decrements tail
+    // ... Let s be the number of Steals that succeed between Pop's reads of tail and head, such that Pop perceives head as m+s
     //     ______________________________________________________
     //    | Pop:       | Steals from {A}:     | Steals from {B}: |
     //    |------------|----------------------|------------------|
@@ -127,8 +126,6 @@ ysJob* ysJobQueue::Pop()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ysJob* ysJobQueue::Steal()
 {
-    ysAssertDebug(std::this_thread::get_id() != m_threadId);
-
     // It is crucial when reading tail that we use ACQUIRE memory ordering in tandem with the RELEASE ordering for the write to tail in
     // "Push." It's a bit subtle, but while RELEASE on its own prevents compiler and run-time reordering in Push, that alone makes no
     // promise that this stealing thread will observe the updated contents of the pushed slot as a side effect of the tail increment.
