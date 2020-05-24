@@ -37,6 +37,8 @@ set(YOSHIPBR_SOURCE_FILES
     threading/ysJobPool.h
     threading/ysJobQueue.cpp
     threading/ysJobQueue.h
+    threading/ysParallelAlgorithms.cpp
+    threading/ysParallelAlgorithms.h
     threading/ysWorker.cpp
     threading/ysWorker.h
     threading/ysWorkerManager.cpp

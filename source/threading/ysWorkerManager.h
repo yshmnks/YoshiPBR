@@ -13,6 +13,8 @@ struct ysWorkerManager
     void Create(ys_int32 workerCount);
     void Destroy();
 
+    ysWorker* GetForegroundWorker();
+    ysWorker* GetWorkerForThisThread();
     ysJob* StealJobForPerpetrator(const ysWorker* perpetrator);
 
     ysWorker m_workers[ysWORKERMANAGER_CAPACITY];

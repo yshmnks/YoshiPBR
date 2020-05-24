@@ -14,8 +14,8 @@ ysAssertCompile((ysJOBQUEUE_CAPACITY & ysJOBQUEUE_MASK) == 0);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysJobQueue::Reset()
 {
-    m_head = 0;
-    m_tail = 0;
+    m_head = 1;
+    m_tail = 1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +122,7 @@ ysJob* ysJobQueue::Pop()
     // succeeded (had they observed the latest head) might fail. It feels more correct to avoid spurious Steal failures.
     bool success = m_head.compare_exchange_weak(head, head + 1, std::memory_order_release);
     // RELEASE to prevent head increment from occuring after tail restoration; also make this write immediately visible to Steal.
-    m_tail.store(tail + 1, std::memory_order_release);
+    m_tail.store(tail, std::memory_order_release);
     return success ? job : nullptr;
 }
 

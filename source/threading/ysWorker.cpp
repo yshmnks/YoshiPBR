@@ -17,8 +17,9 @@ void ysWorker::Reset()
     m_manager = nullptr;
     m_jobQueue.Reset();
     m_thread.Reset();
+    m_threadId = std::thread::id();
 #if ysDEBUG_BUILD
-    m_jobQueue.m_threadId = std::thread::id();
+    m_jobQueue.m_threadId = m_threadId;
 #endif
 }
 
@@ -30,8 +31,9 @@ void ysWorker::CreateInForeground(ysWorkerManager* mgr)
     m_manager = mgr;
     m_jobQueue.Reset();
     m_thread.Reset();
+    m_threadId = std::this_thread::get_id();
 #if ysDEBUG_BUILD
-    m_jobQueue.m_threadId = m_thread.GetID();
+    m_jobQueue.m_threadId = m_threadId;
 #endif
 }
 
@@ -43,8 +45,9 @@ void ysWorker::CreateInBackground(ysWorkerManager* mgr)
     m_manager = mgr;
     m_jobQueue.Reset();
     m_thread.Create(sBackgroundThreadFcn, this);
+    m_threadId = m_thread.GetID();
 #if ysDEBUG_BUILD
-    m_jobQueue.m_threadId = m_thread.GetID();
+    m_jobQueue.m_threadId = m_threadId;
 #endif
 }
 

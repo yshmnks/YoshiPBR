@@ -35,6 +35,7 @@ struct ysWorker
     ysWorkerManager* m_manager;
     ysJobQueue m_jobQueue;
     ysThread m_thread;
+    std::thread::id m_threadId;
 
     Mode m_mode;
 };
