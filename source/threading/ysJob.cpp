@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysJob::Reset()
 {
+    m_workerMgr = nullptr;
     m_fcn = nullptr;
     m_fcnArg = nullptr;
     m_parent = nullptr;
@@ -12,15 +13,18 @@ void ysJob::Reset()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysJob::Create(void(*fcn)(void*), void* fcnArg, ysJob* parent)
+void ysJob::Create(const ysJobDef& def)
 {
-    m_fcn = fcn;
-    m_fcnArg = fcnArg;
-    m_parent = parent;
+    ysAssert(def.m_workerMgr != nullptr);
+    ysAssert(def.m_fcn != nullptr);
+    m_workerMgr = def.m_workerMgr;
+    m_fcn = def.m_fcn;
+    m_fcnArg = def.m_fcnArg;
+    m_parent = def.m_parentJob;
     m_unfinishedJobCount.store(1, std::memory_order_release);
-    if (parent != nullptr)
+    if (m_parent != nullptr)
     {
-        parent->m_unfinishedJobCount.fetch_add(1, std::memory_order_release);
+        m_parent->m_unfinishedJobCount.fetch_add(1, std::memory_order_release);
     }
 }
 
@@ -28,7 +32,7 @@ void ysJob::Create(void(*fcn)(void*), void* fcnArg, ysJob* parent)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysJob::Execute()
 {
-    m_fcn(m_fcnArg);
+    m_fcn(*this, m_fcnArg);
     __Finish();
 }
 

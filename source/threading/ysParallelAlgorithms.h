@@ -5,15 +5,13 @@
 template<typename T>
 struct JobData
 {
-    ysWorkerManager* m_workerMgr;
-    ysJob* m_job;
     T* m_elements;
     ys_int32 m_count;
     void(*m_fcn)(T&);
 };
 
 template<typename T>
-void DivideAndConquerFor(void* dataPtr)
+void DivideAndConquerFor(ysJob& job, void* dataPtr)
 {
     JobData<T>* data = static_cast<JobData<T>*>(dataPtr);
     if (data->m_count < 256)
@@ -28,51 +26,57 @@ void DivideAndConquerFor(void* dataPtr)
     ys_int32 countL = data->m_count / 2;
     ys_int32 countR = data->m_count - countL;
 
-    ysJob jobL;
-    ysJob jobR;
+    JobData<T>* dataL = ysNew JobData<T>;
+    dataL->m_elements = data->m_elements;
+    dataL->m_count = countL;
+    dataL->m_fcn = data->m_fcn;
 
-    JobData<T> dataL;
-    {
-        dataL.m_workerMgr = data->m_workerMgr;
-        dataL.m_job = &jobL;
-        dataL.m_elements = data->m_elements;
-        dataL.m_count = countL;
-        dataL.m_fcn = data->m_fcn;
-    }
+    JobData<T>* dataR = ysNew JobData<T>;
+    dataR->m_elements = data->m_elements + countL;
+    dataR->m_count = countR;
+    dataR->m_fcn = data->m_fcn;
 
-    JobData<T> dataR;
-    {
-        dataR.m_workerMgr = data->m_workerMgr;
-        dataR.m_job = &jobR;
-        dataR.m_elements = data->m_elements + countL;
-        dataR.m_count = countR;
-        dataR.m_fcn = data->m_fcn;
-    }
+    ysJobDef defL;
+    defL.m_workerMgr = job.m_workerMgr;
+    defL.m_fcn = DivideAndConquerFor<T>;
+    defL.m_fcnArg = dataL;
+    defL.m_parentJob = &job;
 
-    ysWorker* workerForThisThread = data->m_workerMgr->GetWorkerForThisThread();
+    ysJobDef defR;
+    defR.m_workerMgr = job.m_workerMgr;
+    defR.m_fcn = DivideAndConquerFor<T>;
+    defR.m_fcnArg = dataR;
+    defR.m_parentJob = &job;
 
-    jobL.Create(DivideAndConquerFor<T>, &dataL, data->m_job);
-    jobR.Create(DivideAndConquerFor<T>, &dataR, data->m_job);
+    ysJob* jobL = ysNew ysJob;
+    jobL->Create(defL);
 
-    workerForThisThread->Submit(&jobL);
-    workerForThisThread->Submit(&jobR);
+    ysJob* jobR = ysNew ysJob;
+    jobR->Create(defR);
+
+    ysWorker* workerForThisThread = job.m_workerMgr->GetWorkerForThisThread();
+    workerForThisThread->Submit(jobL);
+    workerForThisThread->Submit(jobR);
 };
 
 template<typename T>
 void ysParallelFor(ysWorkerManager* mgr, T* elements, ys_int32 count, void(*fcn)(T& element))
 {
-    ysJob rootJob;
+    JobData<T>* data = ysNew JobData<T>;
+    data->m_elements = elements;
+    data->m_count = count;
+    data->m_fcn = fcn;
 
-    JobData<T> rootData;
-    rootData.m_job = &rootJob;
-    rootData.m_workerMgr = mgr;
-    rootData.m_elements = elements;
-    rootData.m_count = count;
-    rootData.m_fcn = fcn;
+    ysJobDef def;
+    def.m_workerMgr = mgr;
+    def.m_fcn = DivideAndConquerFor<T>;
+    def.m_fcnArg = data;
+    def.m_parentJob = nullptr;
+
+    ysJob* job = ysNew ysJob;
+    job->Create(def);
 
     ysWorker* worker = mgr->GetForegroundWorker();
-    rootJob.Create(DivideAndConquerFor<T>, &rootData, nullptr);
-
-    worker->Submit(&rootJob);
-    worker->Wait(&rootJob);
+    worker->Submit(job);
+    worker->Wait(job);
 }
