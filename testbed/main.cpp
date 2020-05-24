@@ -639,6 +639,10 @@ int main(int, char**)
     ysWorkerManager manager;
     manager.Create(n);
     ysParallelFor(&manager, asdf, qwer, zxcv);
+    for (ys_int32 i = 0; i < qwer; ++i)
+    {
+        ysAssert(asdf[i] == 1);
+    }
 #endif
 
     glfwSetErrorCallback(glfwErrorCallback);
