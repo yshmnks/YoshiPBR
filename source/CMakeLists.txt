@@ -1,12 +1,12 @@
 set(YOSHIPBR_SOURCE_FILES
 	common/ysDebugDraw.cpp
-    common/ysLock.cpp
     common/ysMath.cpp
     common/ysProbability.cpp
     common/ysProbability.h
     common/ysRadiometry.cpp
     common/ysRadiometry.h
 	common/ysStructures.cpp
+    common/ysThreading.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp
     geo/ysEllipsoid.cpp
@@ -48,7 +48,6 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysAABB.h
     ../include/YoshiPBR/ysArrayG.h
     ../include/YoshiPBR/ysArrayGF.h
-    ../include/YoshiPBR/ysLock.h
     ../include/YoshiPBR/ysPool.h
     ../include/YoshiPBR/ysBVH.h
 	../include/YoshiPBR/ysDebugDraw.h
@@ -57,6 +56,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysRay.h
     ../include/YoshiPBR/ysShape.h
 	../include/YoshiPBR/ysStructures.h
+    ../include/YoshiPBR/ysThreading.h
     ../include/YoshiPBR/ysTriangle.h
     ../include/YoshiPBR/ysTypes.h
     )

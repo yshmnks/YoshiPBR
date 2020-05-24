@@ -1,10 +1,10 @@
 #include "ysWorkerManager.h"
-#include <cstdlib>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysWorkerManager::Reset()
 {
+    m_alarmSemaphore.Reset();
     m_workerCount = 0;
 }
 
@@ -12,22 +12,43 @@ void ysWorkerManager::Reset()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysWorkerManager::Create(ys_int32 workerCount)
 {
-    ysAssert(workerCount <= ysWORKERMANAGER_CAPACITY);
+    ysAssert(1 <= workerCount && workerCount <= ysWORKERMANAGER_CAPACITY);
+    m_alarmSemaphore.Create(0);
     m_workerCount = workerCount;
-    for (ys_int32 i = 0; i < workerCount; ++i)
+    m_workers[0].CreateInForeground(this);
+    for (ys_int32 i = 1; i < workerCount; ++i)
     {
-        m_workers[i].Reset();
+        m_workers[i].CreateInBackground(this);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysWorker* ysWorkerManager::GetRandomWorker()
+void ysWorkerManager::Destroy()
 {
-    if (m_workerCount == 0)
+    for (ys_int32 i = 0; i < m_workerCount; ++i)
     {
-        return nullptr;
+        m_workers[i].Destroy();
     }
-    ys_int32 idx = std::rand() % m_workerCount;
-    return m_workers + idx;
+    m_workerCount = 0;
+
+    m_alarmSemaphore.Destroy();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysJob* ysWorkerManager::StealJobForPerpetrator(const ysWorker* perpetrator)
+{
+    ys_int32 perpetratorIdx = ys_int32(perpetrator - m_workers);
+    ysAssert(0 <= perpetratorIdx && perpetratorIdx < m_workerCount);
+    for (ys_int32 i = 1; i < m_workerCount; ++i)
+    {
+        ys_int32 victimIdx = (perpetratorIdx + i) % m_workerCount;
+        ysJob* loot = m_workers[victimIdx].m_jobQueue.Steal();
+        if (loot != nullptr)
+        {
+            return loot;
+        }
+    }
+    return nullptr;
 }

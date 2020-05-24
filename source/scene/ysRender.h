@@ -1,11 +1,10 @@
 #pragma once
 
 #include "YoshiPBR/ysArrayG.h"
-#include "YoshiPBR/ysLock.h"
 #include "YoshiPBR/ysStructures.h"
+#include "YoshiPBR/ysThreading.h"
 
 #include <atomic>
-#include <thread>
 
 struct ysLock;
 struct ysScene;
@@ -48,9 +47,8 @@ struct ysRender
     Pixel* m_pixels;
     ys_int32 m_pixelCount;
 
-    // TODO: Figure out how to allocate these on the stack.
     ysLock m_interruptLock;
-    std::thread* m_worker;
+    ysThread m_worker;
 
     std::atomic<State> m_state;
 

@@ -25,7 +25,7 @@ bool ysJobQueue::Push(ysJob* job)
     ysAssertDebug(std::this_thread::get_id() == m_threadId);
 
     ys_uint32 tail = m_tail.load(std::memory_order_relaxed);    // (0)
-    ys_uint32 head = m_head.load(std::memory_order_relaxed);    // (1)
+    ys_uint32 head = m_head.load(std::memory_order_acquire);    // (1)
     ys_int32 count = tail - head;
     ysAssert(0 <= count && count <= ysJOBQUEUE_CAPACITY)
     if (count == ysJOBQUEUE_CAPACITY)
@@ -39,9 +39,7 @@ bool ysJobQueue::Push(ysJob* job)
     // Remarks regarding memory ordering:
     // 0: Only this thread can write the tail, so beyond atomicity, no memory ordering precautions need to be taken when reading the tail
     //    from the same thread (compile-time and run-time reordering cannot change the behavior of single-threaded behavior).
-    // 1: While other threads can write the head, in the case that the pushed slot coincides with head, ensuring that the contents of the
-    //    head slot can be safely overwritten is the responsibility of the stealing thread (which should have already extracted the job
-    //    BEFORE incrementing the head via RELEASE memory ordering).
+    // 1: Without ACQUIRE ordering, there is no guarantee that a RELEASE write on the head from Steal will be immediately visible.
     // 2: Enforce that the job is added to the ring buffer BEFORE incrementing the tail. If the order is swapped, then in the case that the
     //    queue is empty before this push, a stealing thread may falsely observe that the queue is not empty and prematurely read garbage.
 }
@@ -96,15 +94,18 @@ ysJob* ysJobQueue::Pop()
     //
     // This concludes the explanation for the implementation of Pop below.
 
-    // Definitely need ACQUIRE to prevent reordering with the read of head. But do I also need RELEASE? I don't think so...?
-    ys_uint32 tail = m_tail.fetch_sub(1, std::memory_order_acquire);
-    ys_uint32 head = m_head.load(std::memory_order_acquire); // We might race for the head. Make sure the head slot has also been written.
+    // ACQUIRE to prevent reordering with the immediately proceeding read of head.
+    // RELEASE to prevent Steals from {A} from reading the pre-decremeted tail.
+    ys_uint32 tail = m_tail.fetch_sub(1, std::memory_order_acq_rel);
+    // We might race for the head. Make sure we also see the new contents of head slot written by Steal.
+    ys_uint32 head = m_head.load(std::memory_order_acquire);
     ys_int32 count = tail - head;
     ysAssert(count >= 0);
     if (count == 0)
     {
-        // Already empty. Only this thread writes the tail and there are no other writes preceding this one, so RELAXED ordering suffices.
-        m_tail.store(head, std::memory_order_relaxed);
+        // Already empty. Only this thread writes the tail and there are no other writes preceding this one, so RELAXED ordering is safe.
+        // However, to prevent Steals from spuriously failing while this tail write trickles to other threads, use RELEASE ordering.
+        m_tail.store(head, std::memory_order_release);
         return nullptr;
     }
 
@@ -115,10 +116,13 @@ ysJob* ysJobQueue::Pop()
         return job;
     }
 
-    // Race against Steal for the last job. Unlike with Steal, RELAXED ordering suffices. Steal used RELEASE ordering to guard against a
-    // concurrent Push from rendering the head job stale; However, Push/Pop must come from the same thread, so this isn't a problem here.
-    bool success = m_head.compare_exchange_weak(head, head + 1, std::memory_order_relaxed);
-    m_tail.store(tail + 1, std::memory_order_release); // RLEASE to prevent head increment from occuring after tail restoration.
+    // Race against Steal for the last job. RELEASE ordering makes the head increment immediately visible to Steals... I think RELAXED
+    // should technically be safe. As I understand it, CAS compares against the true value in memory. So any Steals that read the old head
+    // due to RELAXED latency cannot acquire a garbage job. However, the latency also means that new Steals that would have otherwise
+    // succeeded (had they observed the latest head) might fail. It feels more correct to avoid spurious Steal failures.
+    bool success = m_head.compare_exchange_weak(head, head + 1, std::memory_order_release);
+    // RELEASE to prevent head increment from occuring after tail restoration; also make this write immediately visible to Steal.
+    m_tail.store(tail + 1, std::memory_order_release);
     return success ? job : nullptr;
 }
 

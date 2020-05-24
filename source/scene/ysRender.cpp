@@ -1,7 +1,4 @@
 #include "ysRender.h"
-
-#include "YoshiPBR/ysLock.h"
-
 #include "scene/ysScene.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,8 +9,8 @@ void ysRender::Reset()
     m_pixels = nullptr;
     m_pixelCount = 0;
     m_interruptLock.Reset();
+    m_worker.Reset();
     m_state = State::e_pending;
-    m_worker = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,23 +83,16 @@ void ysRender::Create(const ysScene* scene, const ysSceneRenderInput& input)
     }
 
     m_interruptLock.Reset();
+    m_worker.Reset();
 
     m_state = State::e_initialized;
-    m_worker = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysRender::Destroy()
 {
-    if (m_worker != nullptr)
-    {
-        if (m_worker->joinable())
-        {
-            m_worker->join();
-        }
-        ysDelete(m_worker);
-    }
+    m_worker.Destroy();
     ysFree(m_pixels);
     Reset();
 }
@@ -286,11 +276,10 @@ void ysRender::Terminate()
     {
         m_state = State::e_terminated;
     }
-
-    if (m_worker != nullptr)
+    
+    if (m_worker.IsJoinable())
     {
-        ysAssert(m_worker->joinable());
-        m_worker->join();
+        m_worker.Join();
     }
 }
 
@@ -307,8 +296,9 @@ static ysRender* sGetRenderFromId(ysRenderId id)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void sRenderDoWork(ysRender* render)
+static void sRenderDoWork(void* renderPtr)
 {
+    ysRender* render = static_cast<ysRender*>(renderPtr);
     render->DoWork();
 }
 
@@ -317,7 +307,7 @@ static void sRenderDoWork(ysRender* render)
 void ysRender_BeginWork(ysRenderId id)
 {
     ysRender* render = sGetRenderFromId(id);
-    render->m_worker = ysNew std::thread(sRenderDoWork, render);
+    render->m_worker.Create(sRenderDoWork, render);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

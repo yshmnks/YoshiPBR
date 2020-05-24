@@ -8,10 +8,10 @@
 #include "mat/reflective/ysMaterialMirror.h"
 #include "mat/reflective/ysMaterialStandard.h"
 #include "YoshiPBR/ysEllipsoid.h"
-#include "YoshiPBR/ysLock.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
 #include "YoshiPBR/ysStructures.h"
+#include "YoshiPBR/ysThreading.h"
 #include "YoshiPBR/ysTriangle.h"
 
 ysScene* ysScene::s_scenes[YOSHIPBR_MAX_SCENE_COUNT] = { nullptr };
