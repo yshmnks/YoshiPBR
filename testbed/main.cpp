@@ -620,7 +620,7 @@ static void sDestroyScene()
 #include <thread>
 static void zxcv(ys_int32& a)
 {
-    a = 8;
+    a++;
 }
 #endif
 

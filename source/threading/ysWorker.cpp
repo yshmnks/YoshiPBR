@@ -65,6 +65,7 @@ void ysWorker::Submit(ysJob* job)
     else
     {
         job->m_fcn(job->m_fcnArg);
+        job->__Finish();
     }
 }
 

@@ -7,7 +7,7 @@ void ysJob::Reset()
     m_fcn = nullptr;
     m_fcnArg = nullptr;
     m_parent = nullptr;
-    m_unfinishedJobCount = 0;
+    m_unfinishedJobCount.store(0, std::memory_order_release);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,10 +17,10 @@ void ysJob::Create(void(*fcn)(void*), void* fcnArg, ysJob* parent)
     m_fcn = fcn;
     m_fcnArg = fcnArg;
     m_parent = parent;
-    m_unfinishedJobCount = 1;
+    m_unfinishedJobCount.store(1, std::memory_order_release);
     if (parent != nullptr)
     {
-        parent->m_unfinishedJobCount++;
+        parent->m_unfinishedJobCount.fetch_add(1, std::memory_order_release);
     }
 }
 
@@ -36,15 +36,17 @@ void ysJob::Execute()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool ysJob::IsFinished() const
 {
-    return (m_unfinishedJobCount == 0);
+    ys_int32 count = m_unfinishedJobCount.load(std::memory_order_acquire);
+    return (count == 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysJob::__Finish()
 {
-    m_unfinishedJobCount--;
-    if (m_unfinishedJobCount == 0 && m_parent != nullptr)
+    ys_int32 count = m_unfinishedJobCount.fetch_sub(1, std::memory_order_acq_rel);
+    ysAssert(count >= 1);
+    if (count == 1 && m_parent != nullptr)
     {
         m_parent->__Finish();
     }
