@@ -5,6 +5,7 @@
 #include <thread>
 
 struct ysJob;
+struct ysWorker;
 
 // Must be a power of 2
 #define ysJOBQUEUE_CAPACITY (16)
@@ -13,7 +14,7 @@ struct ysJob;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysJobQueue
 {
-    void Reset();
+    void SetToEmpty();
 
     // Push/Pop should only be called from the thread that owns this queue
     bool Push(ysJob*);
@@ -26,7 +27,5 @@ struct ysJobQueue
     std::atomic<ys_uint32> m_head; // Only written to by threads that do NOT own this queue.
     std::atomic<ys_uint32> m_tail; // Only written to by the thread that owns this queue.
 
-#if ysDEBUG_BUILD
-    std::thread::id m_threadId;
-#endif
+    ysWorker* m_owner;
 };

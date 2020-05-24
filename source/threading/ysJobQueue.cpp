@@ -1,4 +1,5 @@
 #include "ysJobQueue.h"
+#include "ysWorker.h"
 
 // https://manu343726.github.io/2017-03-13-lock-free-job-stealing-task-system-with-modern-c/
 // https://blog.molecular-matters.com/2015/09/25/job-system-2-0-lock-free-work-stealing-part-3-going-lock-free/
@@ -12,7 +13,7 @@ ysAssertCompile((ysJOBQUEUE_CAPACITY & ysJOBQUEUE_MASK) == 0);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysJobQueue::Reset()
+void ysJobQueue::SetToEmpty()
 {
     m_head = 1;
     m_tail = 1;
@@ -22,7 +23,7 @@ void ysJobQueue::Reset()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool ysJobQueue::Push(ysJob* job)
 {
-    ysAssertDebug(std::this_thread::get_id() == m_threadId);
+    ysAssert(std::this_thread::get_id() == m_owner->m_threadId);
 
     ys_uint32 tail = m_tail.load(std::memory_order_relaxed);    // (0)
     ys_uint32 head = m_head.load(std::memory_order_acquire);    // (1)
@@ -48,7 +49,7 @@ bool ysJobQueue::Push(ysJob* job)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ysJob* ysJobQueue::Pop()
 {
-    ysAssertDebug(std::this_thread::get_id() == m_threadId);
+    ysAssert(std::this_thread::get_id() == m_owner->m_threadId);
 
     // Assume certain aspects of the implementation a priori. Namely...
     //   - Pop first read-decrements tail and only then reads head.
@@ -109,7 +110,7 @@ ysJob* ysJobQueue::Pop()
         return nullptr;
     }
 
-    ysJob* job = m_jobs[(tail - 1) % ysJOBQUEUE_MASK];
+    ysJob* job = m_jobs[(tail - 1) & ysJOBQUEUE_MASK];
     if (count >= 2)
     {
         // there's still more than one item in the queue
