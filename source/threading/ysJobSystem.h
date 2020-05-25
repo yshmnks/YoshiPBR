@@ -1,0 +1,45 @@
+#pragma once
+
+#include "YoshiPBR/ysTypes.h"
+
+struct ysJob;
+struct ysWorkerManager;
+
+typedef void ysJobFcn(ysWorkerManager*, ysJob*, void* args);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysJobDef
+{
+    ysJobDef()
+    {
+        m_fcn = nullptr;
+        m_fcnArg = nullptr;
+        m_parentJob = nullptr;
+    }
+
+    ysJobFcn* m_fcn;
+    void* m_fcnArg;
+    ysJob* m_parentJob;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ysWorkerManagerDef
+{
+    ysWorkerManagerDef()
+    {
+        m_workerCount = 1;
+    }
+
+    ys_int32 m_workerCount;
+};
+
+ysWorkerManager* ysWorkerManager_Create(const ysWorkerManagerDef&);
+void ysWorkerManager_Destroy(ysWorkerManager*);
+
+ysJob* ysWorkerManager_CreateJob(ysWorkerManager*, const ysJobDef&);
+void ysWorkerManager_DestroyJob(ysWorkerManager*, ysJob*);
+
+void ysWorkerManager_SubmitJob(ysWorkerManager*, ysJob*);
+void ysWorkerManager_WaitOnJob(ysWorkerManager*, ysJob*);

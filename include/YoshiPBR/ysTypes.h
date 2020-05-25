@@ -31,12 +31,21 @@
 #define ysDelete(x) delete x
 #define ysDeleteArray(x) delete[] x
 #define ysMemCpy(dst, src, byteCount) memcpy(dst, src, byteCount)
+#define ysMemSet(dst, byteValue, byteCount) memset(dst, byteValue, byteCount)
 #define ysMalloc(byteCount) _aligned_malloc(byteCount, 16)
 #define ysMallocAlign(byteCount, byteAlignment) _aligned_malloc(byteCount, byteAlignment)
 #define ysFree(x) _aligned_free(x)
 #define ysSafeFree(x) \
     _aligned_free(x); \
     x = nullptr;
+
+template <typename T>
+void ysSwap(T& a, T& b)
+{
+    T tmp = a;
+    a = b;
+    b = tmp;
+}
 
 typedef signed char	ys_int8;
 typedef signed short ys_int16;

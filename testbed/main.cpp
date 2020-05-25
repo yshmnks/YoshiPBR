@@ -636,9 +636,10 @@ int main(int, char**)
     ys_int32* asdf = static_cast<ys_int32*>(ysMalloc(sizeof(ys_int32) * qwer));
     memset(asdf, 0, sizeof(ys_int32) * qwer);
     unsigned int n = std::thread::hardware_concurrency();
-    ysWorkerManager manager;
-    manager.Create(n);
-    ysParallelFor(&manager, asdf, qwer, zxcv);
+    ysWorkerManagerDef mgrDef;
+    mgrDef.m_workerCount = n;
+    ysWorkerManager* manager = ysWorkerManager_Create(mgrDef);
+    ysParallelFor(manager, asdf, qwer, zxcv);
     for (ys_int32 i = 0; i < qwer; ++i)
     {
         ysAssert(asdf[i] == 1);

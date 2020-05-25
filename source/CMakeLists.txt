@@ -1,6 +1,7 @@
 set(YOSHIPBR_SOURCE_FILES
 	common/ysDebugDraw.cpp
     common/ysMath.cpp
+    common/ysMemoryPool.cpp
     common/ysProbability.cpp
     common/ysProbability.h
     common/ysRadiometry.cpp
@@ -31,10 +32,10 @@ set(YOSHIPBR_SOURCE_FILES
     scene/ysRender.h
     scene/ysScene.cpp
     scene/ysScene.h
+    threading/ysJobSystem.cpp
+    threading/ysJobSystem.h
     threading/ysJob.cpp
     threading/ysJob.h
-    threading/ysJobPool.cpp
-    threading/ysJobPool.h
     threading/ysJobQueue.cpp
     threading/ysJobQueue.h
     threading/ysParallelAlgorithms.cpp
@@ -50,6 +51,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysAABB.h
     ../include/YoshiPBR/ysArrayG.h
     ../include/YoshiPBR/ysArrayGF.h
+    ../include/YoshiPBR/ysMemoryPool.h
     ../include/YoshiPBR/ysPool.h
     ../include/YoshiPBR/ysBVH.h
 	../include/YoshiPBR/ysDebugDraw.h

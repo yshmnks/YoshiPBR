@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ysWorkerManager.h"
+#include "ysJobSystem.h"
 
 template<typename T>
 struct JobData
@@ -11,7 +11,7 @@ struct JobData
 };
 
 template<typename T>
-void DivideAndConquerFor(ysJob& job, void* dataPtr)
+void DivideAndConquerFor(ysWorkerManager* mgr, ysJob* job, void* dataPtr)
 {
     JobData<T>* data = static_cast<JobData<T>*>(dataPtr);
     if (data->m_count < 256)
@@ -37,26 +37,19 @@ void DivideAndConquerFor(ysJob& job, void* dataPtr)
     dataR->m_fcn = data->m_fcn;
 
     ysJobDef defL;
-    defL.m_workerMgr = job.m_workerMgr;
     defL.m_fcn = DivideAndConquerFor<T>;
     defL.m_fcnArg = dataL;
-    defL.m_parentJob = &job;
+    defL.m_parentJob = job;
 
     ysJobDef defR;
-    defR.m_workerMgr = job.m_workerMgr;
     defR.m_fcn = DivideAndConquerFor<T>;
     defR.m_fcnArg = dataR;
-    defR.m_parentJob = &job;
+    defR.m_parentJob = job;
 
-    ysJob* jobL = ysNew ysJob;
-    jobL->Create(defL);
-
-    ysJob* jobR = ysNew ysJob;
-    jobR->Create(defR);
-
-    ysWorker* workerForThisThread = job.m_workerMgr->GetWorkerForThisThread();
-    workerForThisThread->Submit(jobL);
-    workerForThisThread->Submit(jobR);
+    ysJob* jobL = ysWorkerManager_CreateJob(mgr, defL);
+    ysJob* jobR = ysWorkerManager_CreateJob(mgr, defR);
+    ysWorkerManager_SubmitJob(mgr, jobL);
+    ysWorkerManager_SubmitJob(mgr, jobR);
 };
 
 template<typename T>
@@ -68,15 +61,12 @@ void ysParallelFor(ysWorkerManager* mgr, T* elements, ys_int32 count, void(*fcn)
     data->m_fcn = fcn;
 
     ysJobDef def;
-    def.m_workerMgr = mgr;
     def.m_fcn = DivideAndConquerFor<T>;
     def.m_fcnArg = data;
     def.m_parentJob = nullptr;
 
-    ysJob* job = ysNew ysJob;
-    job->Create(def);
+    ysJob* job = ysWorkerManager_CreateJob(mgr, def);
 
-    ysWorker* worker = mgr->GetForegroundWorker();
-    worker->Submit(job);
-    worker->Wait(job);
+    ysWorkerManager_SubmitJob(mgr, job);
+    ysWorkerManager_WaitOnJob(mgr, job);
 }
