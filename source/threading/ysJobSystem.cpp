@@ -6,7 +6,7 @@
 struct ysJob;
 struct ysJobQueue;
 struct ysWorker;
-struct ysWorkerManager;
+struct ysJobSystem;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,7 +15,7 @@ struct ysJob
     void Create(const ysJobDef&);
     void Destroy();
 
-    void Execute(ysWorkerManager*);
+    void Execute(ysJobSystem*);
     bool IsFinished() const;
 
     void __Finish();
@@ -78,8 +78,8 @@ struct ysWorker
         e_background,
     };
 
-    void CreateInForeground(ysWorkerManager*);
-    void CreateInBackground(ysWorkerManager*);
+    void CreateInForeground(ysJobSystem*);
+    void CreateInBackground(ysJobSystem*);
     void Destroy();
 
     void Submit(ysJob* job);
@@ -92,7 +92,7 @@ struct ysWorker
     // in on the work juggling until all workers' job queues (including its own) are emptied, at which point the foreground thread resumes.
     void SleepUntilAlarm();
 
-    ysWorkerManager* m_manager;
+    ysJobSystem* m_manager;
     ysJobQueue m_jobQueue;
     ysThread m_thread;
     std::thread::id m_threadId;
@@ -105,14 +105,14 @@ struct ysWorker
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ysWorkerManager
+struct ysJobSystem
 {
     enum
     {
         e_workerCapacity = 64
     };
 
-    void Create(const ysWorkerManagerDef&);
+    void Create(const ysJobSystemDef&);
     void Destroy();
 
     ysWorker* GetWorkerForThisThread();
@@ -145,9 +145,9 @@ void ysJob::Destroy()
 
 }
 
-void ysJob::Execute(ysWorkerManager* mgr)
+void ysJob::Execute(ysJobSystem* sys)
 {
-    m_fcn(mgr, this, m_fcnArg);
+    m_fcn(sys, this, m_fcnArg);
     __Finish();
 }
 
@@ -331,10 +331,10 @@ static void sBackgroundThreadFcn(void* workerPtr)
     worker->SleepUntilAlarm();
 }
 
-void ysWorker::CreateInForeground(ysWorkerManager* mgr)
+void ysWorker::CreateInForeground(ysJobSystem* sys)
 {
     m_mode = Mode::e_foreground;
-    m_manager = mgr;
+    m_manager = sys;
     m_jobQueue.m_owner = this;
     m_jobQueue.SetToEmpty();
     m_thread.Reset();
@@ -342,10 +342,10 @@ void ysWorker::CreateInForeground(ysWorkerManager* mgr)
     m_memPool.Create();
 }
 
-void ysWorker::CreateInBackground(ysWorkerManager* mgr)
+void ysWorker::CreateInBackground(ysJobSystem* sys)
 {
     m_mode = Mode::e_background;
-    m_manager = mgr;
+    m_manager = sys;
     m_jobQueue.m_owner = this;
     m_jobQueue.SetToEmpty();
     m_thread.Create(sBackgroundThreadFcn, this);
@@ -423,10 +423,10 @@ void ysWorker::SleepUntilAlarm()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ysWorkerManager
+// ysJobSystem
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ysWorkerManager::Create(const ysWorkerManagerDef& def)
+void ysJobSystem::Create(const ysJobSystemDef& def)
 {
     ysAssert(1 <= def.m_workerCount && def.m_workerCount <= e_workerCapacity);
     m_alarmSemaphore.Create(0);
@@ -438,7 +438,7 @@ void ysWorkerManager::Create(const ysWorkerManagerDef& def)
     }
 }
 
-void ysWorkerManager::Destroy()
+void ysJobSystem::Destroy()
 {
     for (ys_int32 i = 0; i < m_workerCount; ++i)
     {
@@ -449,7 +449,7 @@ void ysWorkerManager::Destroy()
     m_alarmSemaphore.Destroy();
 }
 
-ysWorker* ysWorkerManager::GetWorkerForThisThread()
+ysWorker* ysJobSystem::GetWorkerForThisThread()
 {
     std::thread::id id = std::this_thread::get_id();
     ysAssert(m_workerCount > 0);
@@ -464,7 +464,7 @@ ysWorker* ysWorkerManager::GetWorkerForThisThread()
     return nullptr;
 }
 
-ysJob* ysWorkerManager::StealJobForPerpetrator(const ysWorker* perpetrator)
+ysJob* ysJobSystem::StealJobForPerpetrator(const ysWorker* perpetrator)
 {
     ys_int32 perpetratorIdx = ys_int32(perpetrator - m_workers);
     ysAssert(0 <= perpetratorIdx && perpetratorIdx < m_workerCount);
@@ -482,26 +482,26 @@ ysJob* ysWorkerManager::StealJobForPerpetrator(const ysWorker* perpetrator)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysWorkerManager* ysWorkerManager_Create(const ysWorkerManagerDef& def)
+ysJobSystem* ysJobSystem_Create(const ysJobSystemDef& def)
 {
-    ysWorkerManager* mgr = static_cast<ysWorkerManager*>(ysMalloc(sizeof(ysWorkerManager)));
-    mgr->Create(def);
-    return mgr;
+    ysJobSystem* sys = static_cast<ysJobSystem*>(ysMalloc(sizeof(ysJobSystem)));
+    sys->Create(def);
+    return sys;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysWorkerManager_Destroy(ysWorkerManager* mgr)
+void ysJobSystem_Destroy(ysJobSystem* sys)
 {
-    mgr->Destroy();
-    ysFree(mgr);
+    sys->Destroy();
+    ysFree(sys);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ysJob* ysWorkerManager_CreateJob(ysWorkerManager* mgr, const ysJobDef& def)
+ysJob* ysJobSystem_CreateJob(ysJobSystem* sys, const ysJobDef& def)
 {
-    ysWorker* wkr = mgr->GetWorkerForThisThread();
+    ysWorker* wkr = sys->GetWorkerForThisThread();
     ysJob* job = static_cast<ysJob*>(wkr->m_memPool.Allocate(sizeof(ysJob)));
     job->Create(def);
     return job;
@@ -509,25 +509,25 @@ ysJob* ysWorkerManager_CreateJob(ysWorkerManager* mgr, const ysJobDef& def)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysWorkerManager_DestroyJob(ysWorkerManager* mgr, ysJob* job)
+void ysJobSystem_DestroyJob(ysJobSystem* sys, ysJob* job)
 {
-    ysWorker* wkr = mgr->GetWorkerForThisThread();
+    ysWorker* wkr = sys->GetWorkerForThisThread();
     job->Destroy();
     wkr->m_memPool.Free(job, sizeof(ysJob));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysWorkerManager_SubmitJob(ysWorkerManager* mgr, ysJob* job)
+void ysJobSystem_SubmitJob(ysJobSystem* sys, ysJob* job)
 {
-    ysWorker* wkr = mgr->GetWorkerForThisThread();
+    ysWorker* wkr = sys->GetWorkerForThisThread();
     wkr->Submit(job);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysWorkerManager_WaitOnJob(ysWorkerManager* mgr, ysJob* job)
+void ysJobSystem_WaitOnJob(ysJobSystem* sys, ysJob* job)
 {
-    ysWorker* wkr = mgr->GetWorkerForThisThread();
+    ysWorker* wkr = sys->GetWorkerForThisThread();
     wkr->Wait(job);
 }

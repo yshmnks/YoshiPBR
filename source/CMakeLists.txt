@@ -34,16 +34,8 @@ set(YOSHIPBR_SOURCE_FILES
     scene/ysScene.h
     threading/ysJobSystem.cpp
     threading/ysJobSystem.h
-    threading/ysJob.cpp
-    threading/ysJob.h
-    threading/ysJobQueue.cpp
-    threading/ysJobQueue.h
     threading/ysParallelAlgorithms.cpp
     threading/ysParallelAlgorithms.h
-    threading/ysWorker.cpp
-    threading/ysWorker.h
-    threading/ysWorkerManager.cpp
-    threading/ysWorkerManager.h
     )
 
 set(YOSHIPBR_HEADER_FILES

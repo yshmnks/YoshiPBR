@@ -3,9 +3,9 @@
 #include "YoshiPBR/ysTypes.h"
 
 struct ysJob;
-struct ysWorkerManager;
+struct ysJobSystem;
 
-typedef void ysJobFcn(ysWorkerManager*, ysJob*, void* args);
+typedef void ysJobFcn(ysJobSystem*, ysJob*, void* args);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,9 +25,9 @@ struct ysJobDef
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ysWorkerManagerDef
+struct ysJobSystemDef
 {
-    ysWorkerManagerDef()
+    ysJobSystemDef()
     {
         m_workerCount = 1;
     }
@@ -35,11 +35,11 @@ struct ysWorkerManagerDef
     ys_int32 m_workerCount;
 };
 
-ysWorkerManager* ysWorkerManager_Create(const ysWorkerManagerDef&);
-void ysWorkerManager_Destroy(ysWorkerManager*);
+ysJobSystem* ysJobSystem_Create(const ysJobSystemDef&);
+void ysJobSystem_Destroy(ysJobSystem*);
 
-ysJob* ysWorkerManager_CreateJob(ysWorkerManager*, const ysJobDef&);
-void ysWorkerManager_DestroyJob(ysWorkerManager*, ysJob*);
+ysJob* ysJobSystem_CreateJob(ysJobSystem*, const ysJobDef&);
+void ysJobSystem_DestroyJob(ysJobSystem*, ysJob*);
 
-void ysWorkerManager_SubmitJob(ysWorkerManager*, ysJob*);
-void ysWorkerManager_WaitOnJob(ysWorkerManager*, ysJob*);
+void ysJobSystem_SubmitJob(ysJobSystem*, ysJob*);
+void ysJobSystem_WaitOnJob(ysJobSystem*, ysJob*);

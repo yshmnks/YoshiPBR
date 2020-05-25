@@ -11,7 +11,7 @@ struct JobData
 };
 
 template<typename T>
-void DivideAndConquerFor(ysWorkerManager* mgr, ysJob* job, void* dataPtr)
+void DivideAndConquerFor(ysJobSystem* mgr, ysJob* job, void* dataPtr)
 {
     JobData<T>* data = static_cast<JobData<T>*>(dataPtr);
     if (data->m_count < 256)
@@ -46,14 +46,14 @@ void DivideAndConquerFor(ysWorkerManager* mgr, ysJob* job, void* dataPtr)
     defR.m_fcnArg = dataR;
     defR.m_parentJob = job;
 
-    ysJob* jobL = ysWorkerManager_CreateJob(mgr, defL);
-    ysJob* jobR = ysWorkerManager_CreateJob(mgr, defR);
-    ysWorkerManager_SubmitJob(mgr, jobL);
-    ysWorkerManager_SubmitJob(mgr, jobR);
+    ysJob* jobL = ysJobSystem_CreateJob(mgr, defL);
+    ysJob* jobR = ysJobSystem_CreateJob(mgr, defR);
+    ysJobSystem_SubmitJob(mgr, jobL);
+    ysJobSystem_SubmitJob(mgr, jobR);
 };
 
 template<typename T>
-void ysParallelFor(ysWorkerManager* mgr, T* elements, ys_int32 count, void(*fcn)(T& element))
+void ysParallelFor(ysJobSystem* mgr, T* elements, ys_int32 count, void(*fcn)(T& element))
 {
     JobData<T>* data = ysNew JobData<T>;
     data->m_elements = elements;
@@ -65,8 +65,8 @@ void ysParallelFor(ysWorkerManager* mgr, T* elements, ys_int32 count, void(*fcn)
     def.m_fcnArg = data;
     def.m_parentJob = nullptr;
 
-    ysJob* job = ysWorkerManager_CreateJob(mgr, def);
+    ysJob* job = ysJobSystem_CreateJob(mgr, def);
 
-    ysWorkerManager_SubmitJob(mgr, job);
-    ysWorkerManager_WaitOnJob(mgr, job);
+    ysJobSystem_SubmitJob(mgr, job);
+    ysJobSystem_WaitOnJob(mgr, job);
 }
