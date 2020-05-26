@@ -19,14 +19,16 @@ struct ysMemoryPool
         e_blockSize = 16 * e_maxChunkSize, // Upper bound on the size of the allocation for Block::m_cells
     };
 
-    void Reset();
     void Create();
     void Destroy();
 
     void* Allocate(ys_int32 size);
     void Free(void* obj, ys_int32 size);
 
+    // For debugging
     void ValidateAllocation(void* obj, ys_int32 size) const;
+    void ValidateBlocks() const;
+    void ValidateFreeLists() const;
 
     struct Chunk
     {

@@ -6,17 +6,6 @@ bool ysMemoryPool::s_staticDataInitialized = false;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysMemoryPool::Reset()
-{
-    m_blocks.Create();
-    for (ys_int32 i = 0; i < e_chunkSizeCount; ++i)
-    {
-        m_freeLists[i] = nullptr;
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysMemoryPool::Create()
 {
     if (s_staticDataInitialized == false)
@@ -105,9 +94,6 @@ void* ysMemoryPool::Allocate(ys_int32 size)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysMemoryPool::Free(void* obj, ys_int32 size)
 {
-#if ysDEBUG_BUILD
-    ValidateAllocation(obj, size);
-#endif
     ysAssert(0 <= size && size <= e_maxChunkSize);
     if (size <= 0 || e_maxChunkSize < size)
     {
@@ -132,12 +118,12 @@ void ysMemoryPool::ValidateAllocation(void* obj, ys_int32 size) const
     for (ys_int32 i = 0; i < m_blocks.GetCount(); ++i)
     {
         const Block& block = m_blocks[i];
-        ys_int32 byteOffset = ys_int32(bytePtr - reinterpret_cast<ys_uint8*>(block.m_chunks));
+        ys_int64 byteOffset = bytePtr - reinterpret_cast<ys_uint8*>(block.m_chunks);
         if (block.m_chunkSize == chunkSize)
         {
             if (byteOffset % chunkSize == 0)
             {
-                ys_int32 idx = byteOffset / chunkSize;
+                ys_int64 idx = byteOffset / chunkSize;
                 if (0 <= idx && idx < block.m_chunkCount)
                 {
                     ysAssert(found == false);
@@ -146,7 +132,73 @@ void ysMemoryPool::ValidateAllocation(void* obj, ys_int32 size) const
                 }
             }
         }
-        ysAssert(byteOffset < -chunkSize || block.m_chunkCount * chunkSize < byteOffset);
+        ysAssert(byteOffset <= -chunkSize || block.m_chunkCount * block.m_chunkSize <= byteOffset);
     }
     ysAssert(found);
+
+    Chunk* freeChunk = m_freeLists[chunkSizeIdx];
+    while (freeChunk != nullptr)
+    {
+        ysAssert(static_cast<void*>(freeChunk) != obj);
+        freeChunk = freeChunk->m_nextInFreeList;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysMemoryPool::ValidateBlocks() const
+{
+    // Check that all the blocks are disjoint
+    for (ys_int32 i = 0; i < m_blocks.GetCount() - 1; ++i)
+    {
+        const Block& blockA = m_blocks[i];
+        ys_uint8* firstA = reinterpret_cast<ys_uint8*>(blockA.m_chunks);
+        ys_uint8* lastA = firstA + (blockA.m_chunkCount * blockA.m_chunkSize) - 1;
+        for (ys_int32 j = i + 1; j < m_blocks.GetCount(); ++j)
+        {
+            const Block& blockB = m_blocks[j];
+            ys_uint8* firstB = reinterpret_cast<ys_uint8*>(blockB.m_chunks);
+            ys_uint8* lastB = firstB + (blockB.m_chunkCount * blockB.m_chunkSize) - 1;
+            ysAssert(lastA < firstB || lastB < firstA);
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysMemoryPool::ValidateFreeLists() const
+{
+    for (ys_int32 chunkSizeIdx = 0; chunkSizeIdx < e_chunkSizeCount; ++chunkSizeIdx)
+    {
+        ys_int32 chunkSize = s_chunkSizes[chunkSizeIdx];
+        Chunk* freeChunk = m_freeLists[chunkSizeIdx];
+        ys_uint8* freeChunkBytePtr = reinterpret_cast<ys_uint8*>(freeChunk);
+        while (freeChunk != nullptr)
+        {
+            bool found = false;
+            for (ys_int32 i = 0; i < m_blocks.GetCount(); ++i)
+            {
+                const Block& block = m_blocks[i];
+                ys_int32 byteOffset = ys_int32(freeChunkBytePtr - reinterpret_cast<ys_uint8*>(block.m_chunks));
+                if (block.m_chunkSize != chunkSize)
+                {
+                    continue;
+                }
+
+                if (byteOffset % chunkSize != 0)
+                {
+                    continue;
+                }
+
+                ys_int32 idx = byteOffset / chunkSize;
+                if (0 <= idx && idx < block.m_chunkCount)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            ysAssert(found);
+            freeChunk = freeChunk->m_nextInFreeList;
+        }
+    }
 }
