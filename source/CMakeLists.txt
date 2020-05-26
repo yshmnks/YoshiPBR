@@ -8,6 +8,7 @@ set(YOSHIPBR_SOURCE_FILES
     common/ysRadiometry.h
 	common/ysStructures.cpp
     common/ysThreading.cpp
+    common/ysUnitTests.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp
     geo/ysEllipsoid.cpp
@@ -55,6 +56,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysThreading.h
     ../include/YoshiPBR/ysTriangle.h
     ../include/YoshiPBR/ysTypes.h
+    ../include/YoshiPBR/ysUnitTests.h
     )
 
 add_library(YoshiPBR STATIC ${YOSHIPBR_SOURCE_FILES} ${YOSHIPBR_HEADER_FILES})

@@ -1,4 +1,5 @@
 #include "YoshiPBR/YoshiPBR.h"
+#include "YoshiPBR/ysUnitTests.h"
 
 #include "camera.h"
 #include "draw.h"
@@ -630,6 +631,8 @@ int main(int, char**)
 {
     // Enable memory-leak reports
     _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
+
+    ysUnitTest_Memory();
 
 #if YS_MULTITHREAD_TEST
     ys_int32 qwer = 1000000000;

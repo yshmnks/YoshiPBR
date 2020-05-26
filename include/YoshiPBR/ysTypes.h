@@ -32,6 +32,7 @@
 #define ysDeleteArray(x) delete[] x
 #define ysMemCpy(dst, src, byteCount) memcpy(dst, src, byteCount)
 #define ysMemSet(dst, byteValue, byteCount) memset(dst, byteValue, byteCount)
+#define ysMemCmp(mem1, mem2, byteCount) memcmp(mem1, mem2, byteCount)
 #define ysMalloc(byteCount) _aligned_malloc(byteCount, 16)
 #define ysMallocAlign(byteCount, byteAlignment) _aligned_malloc(byteCount, byteAlignment)
 #define ysFree(x) _aligned_free(x)
