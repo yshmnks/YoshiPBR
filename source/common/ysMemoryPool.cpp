@@ -202,3 +202,37 @@ void ysMemoryPool::ValidateFreeLists() const
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool ysMemoryPool::IsEmpty() const
+{
+    ys_uint32 chunkCounts[e_chunkSizeCount];
+    ysMemSet(chunkCounts, 0x00, sizeof(chunkCounts));
+    for (ys_int32 i = 0; i < m_blocks.GetCount(); ++i)
+    {
+        const Block& block = m_blocks[i];
+        ys_int32 chunkSizeIdx = s_objSizeToChunkSizeIdx[block.m_chunkSize];
+        ysAssert(s_chunkSizes[chunkSizeIdx] == block.m_chunkSize);
+        ysAssert(block.m_chunkCount == e_blockSize / block.m_chunkSize);
+        chunkCounts[chunkSizeIdx] += block.m_chunkCount;
+    }
+
+    for (ys_int32 i = 0; i < e_chunkSizeCount; ++i)
+    {
+        ys_uint32 freeCount = 0;
+        const Chunk* freeChunk = m_freeLists[i];
+        while (freeChunk != nullptr)
+        {
+            ysAssert(freeCount < chunkCounts[i]);
+            freeChunk = freeChunk->m_nextInFreeList;
+            freeCount++;
+        }
+
+        if (freeCount < chunkCounts[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}

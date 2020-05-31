@@ -614,17 +614,6 @@ static void sDestroyScene()
     s_sceneId = ys_nullSceneId;
 }
 
-#define YS_MULTITHREAD_TEST (1)
-
-# if YS_MULTITHREAD_TEST
-#include "c:\Users\yshmnks\Documents\GitHub\YoshiPBR\source\threading\ysParallelAlgorithms.h"
-#include <thread>
-static void zxcv(ys_int32& a)
-{
-    a++;
-}
-#endif
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int main(int, char**)
@@ -633,21 +622,7 @@ int main(int, char**)
     _CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
 
     ysUnitTest_Memory();
-
-#if YS_MULTITHREAD_TEST
-    ys_int32 qwer = 1000000000;
-    ys_int32* asdf = static_cast<ys_int32*>(ysMalloc(sizeof(ys_int32) * qwer));
-    memset(asdf, 0, sizeof(ys_int32) * qwer);
-    unsigned int n = std::thread::hardware_concurrency();
-    ysJobSystemDef sysDef;
-    sysDef.m_workerCount = n;
-    ysJobSystem* jobSys = ysJobSystem_Create(sysDef);
-    ysParallelFor(jobSys, asdf, qwer, zxcv);
-    for (ys_int32 i = 0; i < qwer; ++i)
-    {
-        ysAssert(asdf[i] == 1);
-    }
-#endif
+    ysUnitTest_JobSystem();
 
     glfwSetErrorCallback(glfwErrorCallback);
     if (glfwInit() == 0)

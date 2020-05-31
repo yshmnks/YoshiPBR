@@ -12,8 +12,7 @@ struct ysJobSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ysJob
 {
-    void Create(const ysJobDef&);
-    void Destroy();
+    void Create(ysWorker* worker, const ysJobDef&);
 
     void Execute(ysJobSystem*);
     bool IsFinished() const;
@@ -23,6 +22,8 @@ struct ysJob
     ysJobFcn* m_fcn;
     void* m_fcnArg;
     ysJob* m_parent;
+    // The original worker that submitted this job. This is necessary for freeing this job as we allocated it from that worker's mem pool.
+    ysWorker* m_owner;
     std::atomic<ys_int32> m_unfinishedJobCount;
 
     /////////////
@@ -33,7 +34,8 @@ struct ysJob
         ysJobFcn* a;
         void* b;
         ysJob* c;
-        std::atomic<ys_int32> d;
+        ysWorker* d;
+        std::atomic<ys_int32> e;
     };
     static constexpr std::size_t PAYLOAD_SIZE = sizeof(PayloadFormat);
     static constexpr std::size_t FALSE_SHARING_SIZE = std::hardware_destructive_interference_size;
@@ -78,6 +80,13 @@ struct ysWorker
         e_background,
     };
 
+    enum struct State : ys_uint8
+    {
+        e_idle,
+        e_spinning,
+        e_killed,
+    };
+
     void CreateInForeground(ysJobSystem*);
     void CreateInBackground(ysJobSystem*);
     void Destroy();
@@ -97,10 +106,14 @@ struct ysWorker
     ysThread m_thread;
     std::thread::id m_threadId;
     Mode m_mode;
+    std::atomic<State> m_state;
 
     // Jobs and Job-function-user-data must persist in memory until the Job is executed. To prevent memory fragmentation, users should
     // prefer to pool allocate such (typically) small objects. Each worker maintains its own memory pool to reduce heap contention.
+    // TODO: Due to job-stealing, we must lock the mem pool when allocating/freeing jobs. It seems this should still be better than sharing
+    //       a single memory resource owned by the main thread. However, it remains to be profiled how bad lock contention can get.
     ysMemoryPool m_memPool;
+    ysLock m_memPoolLock; // Freeing jobs reaches across thread boundaries, so we need this lock.
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,28 +134,26 @@ struct ysJobSystem
     ysWorker m_workers[e_workerCapacity];
     ys_int32 m_workerCount;
     ysSemaphore m_alarmSemaphore;
+
+    std::atomic<bool> m_isShuttingDown;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ysJob
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ysJob::Create(const ysJobDef& def)
+void ysJob::Create(ysWorker* owner, const ysJobDef& def)
 {
     ysAssert(def.m_fcn != nullptr);
     m_fcn = def.m_fcn;
     m_fcnArg = def.m_fcnArg;
     m_parent = def.m_parentJob;
+    m_owner = owner;
     m_unfinishedJobCount.store(1, std::memory_order_release);
     if (m_parent != nullptr)
     {
         m_parent->m_unfinishedJobCount.fetch_add(1, std::memory_order_release);
     }
-}
-
-void ysJob::Destroy()
-{
-
 }
 
 void ysJob::Execute(ysJobSystem* sys)
@@ -161,9 +172,18 @@ void ysJob::__Finish()
 {
     ys_int32 count = m_unfinishedJobCount.fetch_sub(1, std::memory_order_acq_rel);
     ysAssert(count >= 1);
-    if (count == 1 && m_parent != nullptr)
+    if (count == 1)
     {
-        m_parent->__Finish();
+        if (m_parent != nullptr)
+        {
+            m_parent->__Finish();
+        }
+
+        {
+            // Is it safe to free the job at this point? Could it still be referenced by other jobs?
+            ysScopedLock lock(&m_owner->m_memPoolLock);
+            m_owner->m_memPool.Free(this, sizeof(ysJob));
+        }
     }
 }
 
@@ -334,23 +354,27 @@ static void sBackgroundThreadFcn(void* workerPtr)
 void ysWorker::CreateInForeground(ysJobSystem* sys)
 {
     m_mode = Mode::e_foreground;
+    m_state.store(State::e_idle, std::memory_order_release);
     m_manager = sys;
     m_jobQueue.m_owner = this;
     m_jobQueue.SetToEmpty();
     m_thread.Reset();
     m_threadId = std::this_thread::get_id();
     m_memPool.Create();
+    m_memPoolLock.Reset();
 }
 
 void ysWorker::CreateInBackground(ysJobSystem* sys)
 {
     m_mode = Mode::e_background;
+    m_state.store(State::e_idle, std::memory_order_release);
     m_manager = sys;
     m_jobQueue.m_owner = this;
     m_jobQueue.SetToEmpty();
     m_thread.Create(sBackgroundThreadFcn, this);
     m_threadId = m_thread.GetID();
     m_memPool.Create();
+    m_memPoolLock.Reset();
 }
 
 void ysWorker::Destroy()
@@ -376,6 +400,7 @@ void ysWorker::Submit(ysJob* job)
 
 void ysWorker::Wait(ysJob* blockingJob)
 {
+    ysAssert(m_mode == Mode::e_foreground || m_state.load(std::memory_order_relaxed) == State::e_spinning);
     while (blockingJob->IsFinished() == false)
     {
         ysJob* job = GetJob();
@@ -406,10 +431,12 @@ ysJob* ysWorker::GetJob()
 void ysWorker::SleepUntilAlarm()
 {
     // Wait until work exists
+    ysAssert(m_state.load(std::memory_order_relaxed) == State::e_idle);
     m_manager->m_alarmSemaphore.Wait();
 
     while (true)
     {
+        m_state.store(State::e_spinning, std::memory_order_release);
         ysJob* job = GetJob();
         while (job != nullptr)
         {
@@ -417,7 +444,19 @@ void ysWorker::SleepUntilAlarm()
             job = GetJob();
         }
 
+        // Is it possible for us to read value that is more stale than the default FALSE set on JobSystem creation? This concern is why we
+        // ACQUIRE. Correctness aside, it would be more optimal for the steady state to use a RELAXED load and on shutdown, continually poke
+        // the alarm until all workers enter the killed state. I suppose ACQUIRE also has its advantages though; we only need to poke the
+        // alarm once on shutdown.
+        bool mgrIsShuttingDown = m_manager->m_isShuttingDown.load(std::memory_order_acquire);
+        if (mgrIsShuttingDown)
+        {
+            m_state.store(State::e_killed, std::memory_order_release);
+            break;
+        }
+
         // Sleepy time. If another job gets pushed into any worker's queue we will wake up.
+        m_state.store(State::e_idle, std::memory_order_release);
         m_manager->m_alarmSemaphore.Wait();
     }
 }
@@ -429,6 +468,7 @@ void ysWorker::SleepUntilAlarm()
 void ysJobSystem::Create(const ysJobSystemDef& def)
 {
     ysAssert(1 <= def.m_workerCount && def.m_workerCount <= e_workerCapacity);
+    m_isShuttingDown.store(false, std::memory_order_release);
     m_alarmSemaphore.Create(0);
     m_workerCount = def.m_workerCount;
     m_workers[0].CreateInForeground(this);
@@ -440,6 +480,32 @@ void ysJobSystem::Create(const ysJobSystemDef& def)
 
 void ysJobSystem::Destroy()
 {
+    ysAssert(std::this_thread::get_id() == m_workers[0].m_threadId);
+    m_isShuttingDown.store(true, std::memory_order_release);
+
+    bool anyBackgroundWorkerStillAlive = true;
+    while (anyBackgroundWorkerStillAlive)
+    {
+        ysJob* job = m_workers[0].GetJob();
+        if (job != nullptr)
+        {
+            job->Execute(this);
+        }
+        // It is possible for this thread to run out of jobs to steal and even for all worker's to empty their respective queues, only for
+        // a still inflight job to push more jobs. So we need to query all workers' states to exit this loop. Once all workers are killed
+        // we can be sure that not only are all job queues empty, but also that there are no more jobs in progress.
+        anyBackgroundWorkerStillAlive = false;
+        for (ys_int32 i = 1; i < m_workerCount; ++i)
+        {
+            ysWorker::State wkrState = m_workers[i].m_state.load(std::memory_order_acquire);
+            if (wkrState != ysWorker::State::e_killed)
+            {
+                anyBackgroundWorkerStillAlive = true;
+                break;
+            }
+        }
+    }
+
     for (ys_int32 i = 0; i < m_workerCount; ++i)
     {
         m_workers[i].Destroy();
@@ -502,18 +568,13 @@ void ysJobSystem_Destroy(ysJobSystem* sys)
 ysJob* ysJobSystem_CreateJob(ysJobSystem* sys, const ysJobDef& def)
 {
     ysWorker* wkr = sys->GetWorkerForThisThread();
-    ysJob* job = static_cast<ysJob*>(wkr->m_memPool.Allocate(sizeof(ysJob)));
-    job->Create(def);
+    ysJob* job;
+    {
+        ysScopedLock lock(&wkr->m_memPoolLock);
+        job = static_cast<ysJob*>(wkr->m_memPool.Allocate(sizeof(ysJob)));
+    }
+    job->Create(wkr, def);
     return job;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysJobSystem_DestroyJob(ysJobSystem* sys, ysJob* job)
-{
-    ysWorker* wkr = sys->GetWorkerForThisThread();
-    job->Destroy();
-    wkr->m_memPool.Free(job, sizeof(ysJob));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -530,4 +591,46 @@ void ysJobSystem_WaitOnJob(ysJobSystem* sys, ysJob* job)
 {
     ysWorker* wkr = sys->GetWorkerForThisThread();
     wkr->Wait(job);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ysJobSystemAllocation ysJobSystem_Allocate(ysJobSystem* sys, ys_int32 byteCount)
+{
+    ysJobSystemAllocation alloc;
+    alloc.m_worker = sys->GetWorkerForThisThread();
+    {
+        ysScopedLock lock(&alloc.m_worker->m_memPoolLock);
+        alloc.m_dataPtr = alloc.m_worker->m_memPool.Allocate(byteCount);
+    }
+    return alloc;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ysJobSystem_Free(ysJobSystemAllocation* alloc, ys_int32 byteCount)
+{
+    ysWorker* wkr = alloc->m_worker;
+    {
+        ysScopedLock lock(&wkr->m_memPoolLock);
+        wkr->m_memPool.Free(alloc->m_dataPtr, byteCount);
+    }
+    alloc->m_dataPtr = nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool ysJobSystem_AreResourcesEmptied(ysJobSystem* sys)
+{
+    for (ys_int32 i = 0; i < sys->m_workerCount; ++i)
+    {
+        ysWorker* wkr = &sys->m_workers[i];
+        ysScopedLock lock(&wkr->m_memPoolLock);
+        bool wkrMemPoolEmpty = wkr->m_memPool.IsEmpty();
+        if (wkrMemPoolEmpty == false)
+        {
+            return false;
+        }
+    }
+    return true;
 }
