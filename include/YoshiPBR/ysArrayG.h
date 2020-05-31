@@ -76,6 +76,7 @@ void ysArrayG<T>::SetCapacity(ys_int32 capacity)
     T* entries = static_cast<T*>(ysMalloc(sizeof(T) * capacity));
     ysMemCpy(entries, m_entries, sizeof(T) * m_count);
     ysSwap(m_entries, entries);
+    ysFree(entries);
     m_capacity = capacity;
 }
 
@@ -89,7 +90,7 @@ void ysArrayG<T>::SetCount(ys_int32 count)
         m_count = count;
         return;
     }
-    SetCapacity(count);
+    SetCapacity((count >> 1) + count);
     m_count = count;
 }
 
@@ -111,7 +112,7 @@ void ysArrayG<T>::PushBack(const T& entry)
 template <typename T>
 T* ysArrayG<T>::Allocate()
 {
-    SetCount(++m_count);
+    SetCount(m_count + 1);
     return m_entries + (m_count - 1);
 }
 

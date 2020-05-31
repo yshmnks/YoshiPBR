@@ -1,12 +1,14 @@
 set(YOSHIPBR_SOURCE_FILES
 	common/ysDebugDraw.cpp
-    common/ysLock.cpp
     common/ysMath.cpp
+    common/ysMemoryPool.cpp
     common/ysProbability.cpp
     common/ysProbability.h
     common/ysRadiometry.cpp
     common/ysRadiometry.h
 	common/ysStructures.cpp
+    common/ysThreading.cpp
+    common/ysUnitTests.cpp
     geo/ysAABB.cpp
     geo/ysBVH.cpp
     geo/ysEllipsoid.cpp
@@ -31,6 +33,10 @@ set(YOSHIPBR_SOURCE_FILES
     scene/ysRender.h
     scene/ysScene.cpp
     scene/ysScene.h
+    threading/ysJobSystem.cpp
+    threading/ysJobSystem.h
+    threading/ysParallelAlgorithms.cpp
+    threading/ysParallelAlgorithms.h
     )
 
 set(YOSHIPBR_HEADER_FILES
@@ -38,7 +44,7 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysAABB.h
     ../include/YoshiPBR/ysArrayG.h
     ../include/YoshiPBR/ysArrayGF.h
-    ../include/YoshiPBR/ysLock.h
+    ../include/YoshiPBR/ysMemoryPool.h
     ../include/YoshiPBR/ysPool.h
     ../include/YoshiPBR/ysBVH.h
 	../include/YoshiPBR/ysDebugDraw.h
@@ -47,8 +53,10 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysRay.h
     ../include/YoshiPBR/ysShape.h
 	../include/YoshiPBR/ysStructures.h
+    ../include/YoshiPBR/ysThreading.h
     ../include/YoshiPBR/ysTriangle.h
     ../include/YoshiPBR/ysTypes.h
+    ../include/YoshiPBR/ysUnitTests.h
     )
 
 add_library(YoshiPBR STATIC ${YOSHIPBR_SOURCE_FILES} ${YOSHIPBR_HEADER_FILES})
@@ -56,7 +64,7 @@ target_include_directories(YoshiPBR PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../includ
 target_include_directories(YoshiPBR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(YoshiPBR PRIVATE -W4 -WX)
 set_target_properties(YoshiPBR PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
 )

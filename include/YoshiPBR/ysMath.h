@@ -112,13 +112,6 @@ ysVec4 ysSplatZ(const ysVec4&);
 ysVec4 ysSplatW(const ysVec4&);
 
 template <typename T>
-void ysSwap(T& a, T& b)
-{
-    T tmp = a;
-    a = b;
-    b = tmp;
-}
-template <typename T>
 T ysMin(const T& a, const T& b)
 {
     return (a < b) ? a : b;
