@@ -61,9 +61,9 @@ void ysUnitTest_Memory()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void sParallelForUnitTestFcn(ys_int32& a)
+static void sParallelForUnitTestFcn(ys_int32& a, ys_int32* delta)
 {
-    a++;
+    a += *delta;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,19 +73,22 @@ void ysUnitTest_JobSystem()
     ys_int32 elemCount = 88888888;
     ys_int32* elems = static_cast<ys_int32*>(ysMalloc(sizeof(ys_int32) * elemCount));
     ysMemSet(elems, 0, sizeof(ys_int32) * elemCount);
-    unsigned int threadCount = std::thread::hardware_concurrency();
+    ys_uint32 threadCount = std::thread::hardware_concurrency();
     ysJobSystemDef jobSysDef;
     jobSysDef.m_workerCount = threadCount;
     ysJobSystem* jobSys = ysJobSystem_Create(jobSysDef);
-    ysParallelFor(jobSys, elems, elemCount, sParallelForUnitTestFcn);
-    ysParallelFor(jobSys, elems, elemCount / 2, sParallelForUnitTestFcn);
+    ys_int32 delta;
+    delta = 8;
+    ysParallelFor(jobSys, elems, elemCount, &delta, 8888, sParallelForUnitTestFcn);
+    delta = 80;
+    ysParallelFor(jobSys, elems, elemCount / 2, &delta, 888, sParallelForUnitTestFcn);
     for (ys_int32 i = 0; i < elemCount / 2; ++i)
     {
-        ysAssert(elems[i] == 2);
+        ysAssert(elems[i] == 88);
     }
     for (ys_int32 i = elemCount / 2; i < elemCount; ++i)
     {
-        ysAssert(elems[i] == 1);
+        ysAssert(elems[i] == 8);
     }
     ysSafeFree(elems);
     bool safeForShutdown = ysJobSystem_AreResourcesEmptied(jobSys);

@@ -7,6 +7,8 @@
 #include "mat/reflective/ysMaterial.h"
 #include "mat/reflective/ysMaterialMirror.h"
 #include "mat/reflective/ysMaterialStandard.h"
+#include "threading/ysJobSystem.h"
+#include "threading/ysParallelAlgorithms.h"
 #include "YoshiPBR/ysEllipsoid.h"
 #include "YoshiPBR/ysRay.h"
 #include "YoshiPBR/ysShape.h"
@@ -210,6 +212,7 @@ void ysScene::Reset()
     m_lightPointCount = 0;
     m_emissiveShapeCount = 0;
     m_renders.Create();
+    m_jobSystem = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -452,6 +455,12 @@ void ysScene::Create(const ysSceneDef& def)
 
     const ys_int32 expectedMaxRenderConcurrency = 8;
     m_renders.Create(expectedMaxRenderConcurrency);
+
+    ys_uint32 hardwareConcurrency = std::thread::hardware_concurrency();
+
+    ysJobSystemDef jobSysDef;
+    jobSysDef.m_workerCount = hardwareConcurrency - 1;
+    m_jobSystem = ysJobSystem_Create(jobSysDef);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -484,6 +493,8 @@ void ysScene::Destroy()
     m_lightPointCount = 0;
     m_emissiveShapeCount = 0;
     m_renders.Destroy();
+    ysJobSystem_Destroy(m_jobSystem);
+    m_jobSystem = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2023,6 +2034,97 @@ ysVec4 ysScene::RenderPixel(const ysSceneRenderInput& input, const ysVec4& pixel
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct SharedData
+{
+    const ysScene* scene;
+    ysRender* target;
+    ys_float32 samplesPerPixelInv;
+    ys_float32 samplesPerPixelCompareInv;
+    ys_float32 height;
+    ys_float32 width;
+    ys_float32 pixelHeight;
+    ys_float32 pixelWidth;
+};
+
+struct PixelCoordinates
+{
+    ys_int32 i;
+    ys_int32 j;
+};
+
+static void ASDF(PixelCoordinates& px, SharedData* sd)
+{
+    ys_int32 i = px.i;
+    ys_int32 j = px.j;
+
+    const ysScene* scene = sd->scene;
+    ysRender* target = sd->target;
+    const ysSceneRenderInput& input = target->m_input;
+    ys_float32 samplesPerPixelInv = sd->samplesPerPixelInv;
+    ys_float32 samplesPerPixelCompareInv = sd->samplesPerPixelCompareInv;
+    ys_float32 height = sd->height;
+    ys_float32 width = sd->width;
+    ys_float32 pixelHeight = sd->pixelHeight;
+    ys_float32 pixelWidth = sd->pixelWidth;
+
+    ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input.m_pixelCountY);
+    ys_float32 yMid = height * yFraction;
+    ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input.m_pixelCountX) - 1.0f;
+    ys_float32 xMid = width * xFraction;
+
+    ys_int32 pixelIdx = input.m_pixelCountX * i + j;
+    ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
+
+    if (input.m_renderMode == ysSceneRenderInput::RenderMode::e_compare)
+    {
+        ysSceneRenderInput tmpInput = input;
+        tmpInput.m_renderMode = ysSceneRenderInput::RenderMode::e_regular;
+
+        ysVec4 pixelValueA = ysVec4_zero;
+        for (ys_int32 sampleIdx = 0; sampleIdx < tmpInput.m_samplesPerPixel; ++sampleIdx)
+        {
+            ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+            ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+            ysVec4 deltaValue = scene->RenderPixel(tmpInput, pixelDirLS);
+            pixelValueA += deltaValue;
+        }
+        pixelValueA *= ysSplat(samplesPerPixelInv);
+
+        ysSwap(tmpInput.m_giInput, tmpInput.m_giInputCompare);
+        ysSwap(tmpInput.m_samplesPerPixel, tmpInput.m_samplesPerPixelCompare);
+
+        ysVec4 pixelValueB = ysVec4_zero;
+        for (ys_int32 sampleIdx = 0; sampleIdx < tmpInput.m_samplesPerPixel; ++sampleIdx)
+        {
+            ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+            ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+            ysVec4 deltaValue = scene->RenderPixel(tmpInput, pixelDirLS);
+            pixelValueB += deltaValue;
+        }
+        pixelValueB *= ysSplat(samplesPerPixelCompareInv);
+
+        pixel->m_value = (pixelValueB - pixelValueA) + ysVec4_half;
+    }
+    else
+    {
+        pixel->m_value = ysVec4_zero;
+        for (ys_int32 sampleIdx = 0; sampleIdx < input.m_samplesPerPixel; ++sampleIdx)
+        {
+            ys_float32 x = xMid + ysRandom(-pixelWidth, pixelWidth);
+            ys_float32 y = yMid + ysRandom(-pixelHeight, pixelHeight);
+            ysVec4 pixelDirLS = ysVecSet(x, y, -1.0f, 0.0f);
+            ysVec4 deltaValue = scene->RenderPixel(input, pixelDirLS);
+            pixel->m_value += deltaValue;
+        }
+        pixel->m_value *= ysSplat(samplesPerPixelInv);
+    }
+    pixel->m_isNull = false;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysScene::DoRenderWork(ysRender* target) const
 {
     const ysSceneRenderInput& input = target->m_input;
@@ -2049,18 +2151,21 @@ void ysScene::DoRenderWork(ysRender* target) const
     const ys_float32 pixelHeight = height / ys_float32(input.m_pixelCountY);
     const ys_float32 pixelWidth = width / ys_float32(input.m_pixelCountX);
 
-    ys_int32 pixelIdx = 0;
-    for (ys_int32 i = 0; i < input.m_pixelCountY && target->m_state != ysRender::State::e_terminated; ++i)
+    const ys_int32 k_pixelBatchCount = 256;
+    static bool asdf = false;
+    //if (m_jobSystem == nullptr)
+    if (asdf)
     {
-        ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input.m_pixelCountY);
-        ys_float32 yMid = height * yFraction;
-        for (ys_int32 j = 0; j < input.m_pixelCountX && target->m_state != ysRender::State::e_terminated; ++j)
+        ys_int32 pixelIdx0 = 0;
+        ys_int32 pixelIdx = 0;
+        for (ys_int32 i = 0; i < input.m_pixelCountY && target->m_state != ysRender::State::e_terminated; ++i)
         {
-            ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input.m_pixelCountX) - 1.0f;
-            ys_float32 xMid = width * xFraction;
-
+            ys_float32 yFraction = 1.0f - 2.0f * ys_float32(i + 1) / ys_float32(input.m_pixelCountY);
+            ys_float32 yMid = height * yFraction;
+            for (ys_int32 j = 0; j < input.m_pixelCountX && target->m_state != ysRender::State::e_terminated; ++j)
             {
-                ysScopedLock(&target->m_interruptLock);
+                ys_float32 xFraction = 2.0f * ys_float32(j + 1) / ys_float32(input.m_pixelCountX) - 1.0f;
+                ys_float32 xMid = width * xFraction;
 
                 ysRender::Pixel* pixel = target->m_pixels + pixelIdx;
 
@@ -2111,10 +2216,82 @@ void ysScene::DoRenderWork(ysRender* target) const
                 }
 
                 pixel->m_isNull = false;
-            }
 
-            pixelIdx++;
+                pixelIdx++;
+
+                if (pixelIdx - pixelIdx0 == k_pixelBatchCount)
+                {
+                    ysScopedLock lock(&target->m_interruptLock);
+                    for (ys_int32 k = pixelIdx0; k < pixelIdx; ++k)
+                    {
+                        target->m_exposedPixels[k] = target->m_pixels[k];
+                    }
+                    pixelIdx0 = pixelIdx;
+                }
+            }
         }
+
+        if (pixelIdx - pixelIdx0 > 0)
+        {
+            ysScopedLock lock(&target->m_interruptLock);
+            for (ys_int32 k = pixelIdx0; k < pixelIdx; ++k)
+            {
+                target->m_exposedPixels[k] = target->m_pixels[k];
+            }
+        }
+    }
+    else
+    {
+        SharedData sharedData;
+        sharedData.scene = this;
+        sharedData.target = target;
+        sharedData.samplesPerPixelInv = samplesPerPixelInv;
+        sharedData.samplesPerPixelCompareInv = samplesPerPixelCompareInv;
+        sharedData.height = height;
+        sharedData.width = width;
+        sharedData.pixelHeight = pixelHeight;
+        sharedData.pixelWidth = pixelWidth;
+        PixelCoordinates pixelBatch[k_pixelBatchCount];
+
+        ys_int32 n = 0;
+        for (ys_int32 i = 0; i < input.m_pixelCountY && target->m_state != ysRender::State::e_terminated; ++i)
+        {
+            for (ys_int32 j = 0; j < input.m_pixelCountX && target->m_state != ysRender::State::e_terminated; ++j)
+            {
+                PixelCoordinates* dst = pixelBatch + n;
+                dst->i = i;
+                dst->j = j;
+                n++;
+
+                if (n == k_pixelBatchCount)
+                {
+                    ysParallelFor(m_jobSystem, pixelBatch, n, &sharedData, 2, ASDF);
+                    n = 0;
+
+                    ysScopedLock lock(&target->m_interruptLock);
+                    for (ys_int32 k = 0; k < k_pixelBatchCount; ++k)
+                    {
+                        const PixelCoordinates& src = pixelBatch[k];
+                        ys_int32 pixelIdx = input.m_pixelCountX * src.i + src.j;
+                        target->m_exposedPixels[pixelIdx] = target->m_pixels[pixelIdx];
+                    }
+                }
+            }
+        }
+
+        if (n > 0)
+        {
+            ysParallelFor(m_jobSystem, pixelBatch, n, &sharedData, 2, ASDF);
+
+            ysScopedLock lock(&target->m_interruptLock);
+            for (ys_int32 k = 0; k < k_pixelBatchCount; ++k)
+            {
+                const PixelCoordinates& src = pixelBatch[k];
+                ys_int32 pixelIdx = input.m_pixelCountX * src.i + src.j;
+                target->m_exposedPixels[pixelIdx] = target->m_pixels[pixelIdx];
+            }
+        }
+
     }
 }
 
@@ -2348,7 +2525,7 @@ void ysScene_DestroyRender(ysRenderId id)
 
     ysAssert(scene->m_renders[id.m_index].m_poolIndex == id.m_index);
     ysRender& render = scene->m_renders[id.m_index];
-    render.Terminate();
+    render.Terminate(scene);
     render.Destroy();
     scene->m_renders.Free(id.m_index);
 }

@@ -13,6 +13,7 @@ struct ysLight;
 struct ysLightPoint;
 struct ysEmissiveMaterial;
 struct ysEmissiveMaterialUniform;
+struct ysJobSystem;
 struct ysMaterial;
 struct ysMaterialMirror;
 struct ysMaterialStandard;
@@ -110,4 +111,6 @@ struct ysScene
     ys_int32 m_emissiveShapeCount;
     
     ysPool<ysRender> m_renders;
+
+    ysJobSystem* m_jobSystem;
 };

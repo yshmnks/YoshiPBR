@@ -35,7 +35,7 @@ struct ysRender
     void DoWork();
     void GetOutputIntermediate(ysSceneRenderOutputIntermediate*);
     void GetOutputFinal(ysSceneRenderOutput*);
-    void Terminate();
+    void Terminate(const ysScene*);
 
     const ysScene* m_scene;
 
@@ -45,10 +45,10 @@ struct ysRender
     ysGlobalIlluminationInput_UniDirectional m_inputsBi[2];
 
     Pixel* m_pixels;
+    Pixel* m_exposedPixels;
     ys_int32 m_pixelCount;
 
     ysLock m_interruptLock;
-    ysThread m_worker;
 
     std::atomic<State> m_state;
 
