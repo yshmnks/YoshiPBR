@@ -390,7 +390,7 @@ void ysWorker::Submit(ysJob* job)
     bool success = m_jobQueue.Push(job);
     if (success)
     {
-        m_manager->m_alarmSemaphore.Signal(m_manager->m_workerCount);
+        m_manager->m_alarmSemaphore.Signal(m_manager->m_workerCount - 1);
     }
     else
     {
@@ -482,6 +482,7 @@ void ysJobSystem::Destroy()
 {
     ysAssert(std::this_thread::get_id() == m_workers[0].m_threadId);
     m_isShuttingDown.store(true, std::memory_order_release);
+    m_alarmSemaphore.Signal(m_workerCount - 1);
 
     bool anyBackgroundWorkerStillAlive = true;
     while (anyBackgroundWorkerStillAlive)
