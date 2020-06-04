@@ -1,5 +1,6 @@
 #include "ysRender.h"
 #include "scene/ysScene.h"
+#include "threading/ysJobSystem.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -7,9 +8,9 @@ void ysRender::Reset()
 {
     m_scene = nullptr;
     m_pixels = nullptr;
+    m_exposedPixels = nullptr;
     m_pixelCount = 0;
     m_interruptLock.Reset();
-    m_worker.Reset();
     m_state = State::e_pending;
 }
 
@@ -75,15 +76,18 @@ void ysRender::Create(const ysScene* scene, const ysSceneRenderInput& input)
     }
 
     m_pixelCount = input.m_pixelCountX * input.m_pixelCountY;
-    m_pixels = static_cast<Pixel*>(ysMalloc(sizeof(Pixel) * m_pixelCount));
+    m_pixels = static_cast<Pixel*>(ysMalloc(sizeof(Pixel) * m_pixelCount * 2));
+    m_exposedPixels = m_pixels + m_pixelCount;
     for (ys_int32 i = 0; i < m_pixelCount; ++i)
     {
         m_pixels[i].m_value = ysVec4_zero;
         m_pixels[i].m_isNull = true;
+
+        m_exposedPixels[i].m_value = ysVec4_zero;
+        m_exposedPixels[i].m_isNull = true;
     }
 
     m_interruptLock.Reset();
-    m_worker.Reset();
 
     m_state = State::e_initialized;
 }
@@ -92,7 +96,6 @@ void ysRender::Create(const ysScene* scene, const ysSceneRenderInput& input)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysRender::Destroy()
 {
-    m_worker.Destroy();
     ysFree(m_pixels);
     Reset();
 }
@@ -123,7 +126,7 @@ void ysRender::GetOutputIntermediate(ysSceneRenderOutputIntermediate* output)
     for (ys_int32 i = 0; i < m_pixelCount; ++i)
     {
         ysFloat4& intermediatePixel = output->m_pixels[i];
-        const ysRender::Pixel& workingPixel = m_pixels[i];
+        const ysRender::Pixel& workingPixel = m_exposedPixels[i];
         if (workingPixel.m_isNull)
         {
             intermediatePixel.r = 0.0f;
@@ -268,7 +271,7 @@ void ysRender::GetOutputFinal(ysSceneRenderOutput* output)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void ysRender::Terminate()
+void ysRender::Terminate(const ysScene* scene)
 {
     ysAssert(m_state == State::e_working || m_state == State::e_finished);
 
@@ -276,10 +279,11 @@ void ysRender::Terminate()
     {
         m_state = State::e_terminated;
     }
-    
-    if (m_worker.IsJoinable())
+
+    if (scene->m_jobSystem != nullptr)
     {
-        m_worker.Join();
+        // TODO: Wait on the render job to finish it's current batch of pixels. We cannot do this yet because it would require us to hold
+        //       onto the job pointer, but the current job system implementation auto-frees finished jobs, so this pointer might be stale.
     }
 }
 
@@ -296,7 +300,7 @@ static ysRender* sGetRenderFromId(ysRenderId id)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static void sRenderDoWork(void* renderPtr)
+static void sRenderDoWork(ysJobSystem*, ysJob*, void* renderPtr)
 {
     ysRender* render = static_cast<ysRender*>(renderPtr);
     render->DoWork();
@@ -306,8 +310,23 @@ static void sRenderDoWork(void* renderPtr)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void ysRender_BeginWork(ysRenderId id)
 {
-    ysRender* render = sGetRenderFromId(id);
-    render->m_worker.Create(sRenderDoWork, render);
+    ysScene* scene = ysScene::s_scenes[id.m_sceneIdx];
+    ysAssert(scene != nullptr);
+    ysRender& render = scene->m_renders[id.m_index];
+    ysAssert(render.m_poolIndex == id.m_index);
+    if (scene->m_jobSystem == nullptr)
+    {
+        render.DoWork();
+    }
+    else
+    {
+        ysJobDef jobDef;
+        jobDef.m_fcn = sRenderDoWork;
+        jobDef.m_fcnArg = &render;
+        jobDef.m_parentJob = nullptr;
+        ysJob* job = ysJobSystem_CreateJob(scene->m_jobSystem, jobDef);
+        ysJobSystem_SubmitJob(scene->m_jobSystem, job);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
