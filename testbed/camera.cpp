@@ -17,32 +17,33 @@ Camera::Camera()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void Camera::BuildProjectionMatrix(ys_float32* m) const
+void Camera::BuildProjectionMatrix(ys_float32* m, ys_float32 nearPlaneBias) const
 {
     // http://www.songho.ca/opengl/gl_projectionmatrix.html
-    ys_float32 h = m_near * tanf(m_verticalFov);
+    ys_float32 near = m_near + nearPlaneBias;
+    ys_float32 h = near * tanf(m_verticalFov);
     ys_float32 w = h * m_aspectRatio;
 
-    ys_float32 negInvLength = 1.0f / (m_near - m_far);
+    ys_float32 negInvLength = 1.0f / (near - m_far);
 
-    m[0] = m_near / w;
+    m[0] = near / w;
     m[1] = 0.0f;
     m[2] = 0.0f;
     m[3] = 0.0f;
 
     m[4] = 0.0f;
-    m[5] = m_near / h;
+    m[5] = near / h;
     m[6] = 0.0f;
     m[7] = 0.0f;
 
     m[8] = 0.0f;
     m[9] = 0.0f;
-    m[10] = negInvLength * (m_near + m_far);
+    m[10] = negInvLength * (near + m_far);
     m[11] = -1.0f;
 
     m[12] = 0.0f;
     m[13] = 0.0f;
-    m[14] = negInvLength * (2.0f * m_near * m_far);
+    m[14] = negInvLength * (2.0f * near * m_far);
     m[15] = 0.0f;
 }
 

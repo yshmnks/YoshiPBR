@@ -12,6 +12,9 @@
 
 #define BUFFER_OFFSET(x)  ((const void*) (x))
 
+static const ys_float32 s_edgeNearBias = 0.01f;
+static const ys_float32 s_faceNearBias = 0.0f;
+
 DebugDraw g_debugDraw;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -290,7 +293,7 @@ struct GLRenderLines
             0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 0.0f, 1.0f
         };
-        g_camera.BuildProjectionMatrix(proj);
+        g_camera.BuildProjectionMatrix(proj, s_edgeNearBias);
         g_camera.BuildViewMatrix(view);
 
         glUniformMatrix4fv(m_projectionUniform, 1, GL_FALSE, proj);
@@ -436,7 +439,7 @@ struct GLRenderTriangles
             0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 0.0f, 1.0f
         };
-        g_camera.BuildProjectionMatrix(proj);
+        g_camera.BuildProjectionMatrix(proj, s_faceNearBias);
         g_camera.BuildViewMatrix(view);
         
         glUniformMatrix4fv(m_projectionUniform, 1, GL_FALSE, proj);
@@ -727,7 +730,7 @@ struct GLRenderPrimitiveLines
         {
             ys_float32 proj[16];
             ys_float32 view[16];
-            g_camera.BuildProjectionMatrix(proj);
+            g_camera.BuildProjectionMatrix(proj, s_edgeNearBias);
             g_camera.BuildViewMatrix(view);
             glUniformMatrix4fv(m_uniformProjMatrix, 1, GL_FALSE, proj);
             glUniformMatrix4fv(m_uniformViewMatrix, 1, GL_FALSE, view);
@@ -1161,7 +1164,7 @@ struct GLRenderPrimitiveTriangles
         {
             ys_float32 proj[16];
             ys_float32 view[16];
-            g_camera.BuildProjectionMatrix(proj);
+            g_camera.BuildProjectionMatrix(proj, s_faceNearBias);
             g_camera.BuildViewMatrix(view);
             glUniformMatrix4fv(m_uniformProjMatrix, 1, GL_FALSE, proj);
             glUniformMatrix4fv(m_uniformViewMatrix, 1, GL_FALSE, view);
@@ -1472,7 +1475,7 @@ struct GLRenderTexturedQuads
 
             ys_float32 proj[16];
             ys_float32 view[16];
-            g_camera.BuildProjectionMatrix(proj);
+            g_camera.BuildProjectionMatrix(proj, s_faceNearBias);
             g_camera.BuildViewMatrix(view);
             glUniformMatrix4fv(m_uniformProjMatrix, 1, GL_FALSE, proj);
             glUniformMatrix4fv(m_uniformViewMatrix, 1, GL_FALSE, view);

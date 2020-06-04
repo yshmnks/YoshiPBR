@@ -9,7 +9,7 @@ struct Camera
     Camera();
 
     // m is populated in column-major order
-    void BuildProjectionMatrix(ys_float32* m) const;
+    void BuildProjectionMatrix(ys_float32* m, ys_float32 nearPlaneBias) const;
     void BuildViewMatrix(ys_float32* m) const;
 
     ysVec4 ComputeRight() const;
