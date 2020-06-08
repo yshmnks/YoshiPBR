@@ -42,6 +42,7 @@ void ysLock::Release()
 {
     bool anticipated = true;
     bool success = m_acquired.compare_exchange_weak(anticipated, false);
+    YS_REF(success);
     ysAssert(success);
 }
 

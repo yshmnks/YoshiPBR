@@ -12,11 +12,17 @@
 #define ysDEBUG_BUILD (0)
 #endif
 
+#define ysASSERTIONS_ENABLED (ysDEBUG_BUILD || 0) // Quick and dirty hack to turn off assertions. I should really make another build configuration...
+
+#if ysASSERTIONS_ENABLED
 #define ysAssert(x)		\
     if (!(x))			\
     {					\
         __debugbreak();	\
     }
+#else
+#define ysAssert(x)
+#endif
 
 #if ysDEBUG_BUILD
     #define ysAssertDebug(x) ysAssert(x)

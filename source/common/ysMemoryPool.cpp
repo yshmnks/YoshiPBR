@@ -154,11 +154,13 @@ void ysMemoryPool::ValidateBlocks() const
         const Block& blockA = m_blocks[i];
         ys_uint8* firstA = reinterpret_cast<ys_uint8*>(blockA.m_chunks);
         ys_uint8* lastA = firstA + (blockA.m_chunkCount * blockA.m_chunkSize) - 1;
+        YS_REF(lastA);
         for (ys_int32 j = i + 1; j < m_blocks.GetCount(); ++j)
         {
             const Block& blockB = m_blocks[j];
             ys_uint8* firstB = reinterpret_cast<ys_uint8*>(blockB.m_chunks);
             ys_uint8* lastB = firstB + (blockB.m_chunkCount * blockB.m_chunkSize) - 1;
+            YS_REF(lastB);
             ysAssert(lastA < firstB || lastB < firstA);
         }
     }

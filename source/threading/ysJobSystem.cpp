@@ -322,6 +322,7 @@ ysJob* ysJobQueue::Steal()
     ys_uint32 head = m_head.load(std::memory_order_acquire);
     ys_uint32 tail = m_tail.load(std::memory_order_acquire);
     ys_int32 count = tail - head;
+    YS_REF(count);
     ysAssert(count <= e_jobCapacity);
     if (head >= tail)
     {

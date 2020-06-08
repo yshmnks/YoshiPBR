@@ -203,6 +203,8 @@ struct GLRenderLines
             ys_uint32 lenPS = 0;
             ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/edge_VS.glsl");
             ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/edge_PS.glsl");
+            YS_REF(resVS);
+            YS_REF(resPS);
             ysAssert(resVS == 0);
             ysAssert(resPS == 0);
             m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
@@ -350,6 +352,8 @@ struct GLRenderTriangles
             ys_uint32 lenPS = 0;
             ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/face_VS.glsl");
             ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/face_PS.glsl");
+            YS_REF(resVS);
+            YS_REF(resPS);
             ysAssert(resVS == 0);
             ysAssert(resPS == 0);
             m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
@@ -496,6 +500,8 @@ struct GLRenderPrimitiveLines
             ys_uint32 lenPS = 0;
             ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/primEdge_VS.glsl");
             ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/primEdge_PS.glsl");
+            YS_REF(resVS);
+            YS_REF(resPS);
             ysAssert(resVS == 0);
             ysAssert(resPS == 0);
             m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
@@ -861,6 +867,8 @@ struct GLRenderPrimitiveTriangles
             ys_uint32 lenPS = 0;
             ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/primFace_VS.glsl");
             ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/primFace_PS.glsl");
+            YS_REF(resVS);
+            YS_REF(resPS);
             ysAssert(resVS == 0);
             ysAssert(resPS == 0);
             m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);
@@ -1309,6 +1317,8 @@ struct GLRenderTexturedQuads
             ys_uint32 lenPS = 0;
             ys_int32 resVS = ShaderLoader::sLoadShader(&shaderSourceVS, &lenVS, "./shaders/texturedQuad_VS.glsl");
             ys_int32 resPS = ShaderLoader::sLoadShader(&shaderSourcePS, &lenPS, "./shaders/texturedQuad_PS.glsl");
+            YS_REF(resVS);
+            YS_REF(resPS);
             ysAssert(resVS == 0);
             ysAssert(resPS == 0);
             m_programId = sCreateShaderProgram(shaderSourceVS, shaderSourcePS);

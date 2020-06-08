@@ -574,6 +574,7 @@ void ysBVH::Create(const ysAABB* leafAABBs, const ysShapeId* leafShapeIds, ys_in
             ysAssert((node->m_left == ys_nullIndex) == (node->m_shapeId != ys_nullShapeId));
             ysAssert(0 <= node->m_parent && node->m_parent < i);
             const Node* parent = m_nodes + node->m_parent;
+            YS_REF(parent);
             ysAssert(parent->m_aabb.Contains(node->m_aabb));
             ysAssert(parent->m_left == i || parent->m_right == i);
         }
