@@ -16,6 +16,10 @@
 #include "YoshiPBR/ysThreading.h"
 #include "YoshiPBR/ysTriangle.h"
 
+// TODO: As soon as markup any of the code with Tracy macros, Tracy initialization barfs complaining about my CPU
+//       (i7-6700) missing the RDTSC instruction. This happens even for Tracy's provided example client applications.
+#include "tracy/Tracy.hpp"
+
 ysScene* ysScene::s_scenes[YOSHIPBR_MAX_SCENE_COUNT] = { nullptr };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

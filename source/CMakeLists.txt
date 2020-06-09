@@ -60,7 +60,6 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysUnitTests.h
     )
 
-#TODO: As soon as I enable this, Tracy initialization barfs complaining about my CPU (i7-6700) missing RDTSC instruction. This happens for the provided example client applications as well.
 add_definitions(-DTRACY_ENABLE)
 
 add_library(YoshiPBR STATIC ${YOSHIPBR_SOURCE_FILES} ${YOSHIPBR_HEADER_FILES})
