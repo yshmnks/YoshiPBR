@@ -1548,6 +1548,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
     {
         const ysDirectionalProbabilityDensity& p10 = y[i].m_p[0];
         const ysDirectionalProbabilityDensity& p01 = y[i].m_p[1];
+        YS_REF(p10);
+        YS_REF(p01);
         ysAssert(p10.m_perProjectedSolidAngle.m_isFinite || p10.m_perProjectedSolidAngle.m_value == 1.0f);
         ysAssert(p01.m_perProjectedSolidAngle.m_isFinite || p01.m_perProjectedSolidAngle.m_value == 1.0f);
     }
@@ -1556,6 +1558,8 @@ ysVec4 ysScene::EvaluateTruncatedSubpaths(const GenerateSubpathOutput& subpaths,
     {
         const ysDirectionalProbabilityDensity& p10 = z[i].m_p[0];
         const ysDirectionalProbabilityDensity& p01 = z[i].m_p[1];
+        YS_REF(p10);
+        YS_REF(p01);
         ysAssert(p10.m_perProjectedSolidAngle.m_isFinite || p10.m_perProjectedSolidAngle.m_value == 1.0f);
         ysAssert(p01.m_perProjectedSolidAngle.m_isFinite || p01.m_perProjectedSolidAngle.m_value == 1.0f);
     }

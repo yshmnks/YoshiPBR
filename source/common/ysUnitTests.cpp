@@ -50,6 +50,7 @@ void ysUnitTest_Memory()
         for (ys_int32 i = 0; i < allocCount; ++i)
         {
             ys_int32 cmpRes = ysMemCmp(allocations[i].m_ptr, cmpBuffer, allocations[i].m_size);
+            YS_REF(cmpRes);
             ysAssert(cmpRes == 0);
             memPool.ValidateAllocation(allocations[i].m_ptr, allocations[i].m_size);
         }
@@ -92,6 +93,7 @@ void ysUnitTest_JobSystem()
     }
     ysSafeFree(elems);
     bool safeForShutdown = ysJobSystem_AreResourcesEmptied(jobSys);
+    YS_REF(safeForShutdown);
     ysAssert(safeForShutdown);
     ysJobSystem_Destroy(jobSys);
 }
