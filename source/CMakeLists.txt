@@ -37,6 +37,7 @@ set(YOSHIPBR_SOURCE_FILES
     threading/ysJobSystem.h
     threading/ysParallelAlgorithms.cpp
     threading/ysParallelAlgorithms.h
+    tracy/TracyClient.cpp #TIP: Use #pragma warning(push, 0) and #pagma warning(pop) in this file to work around warnings as errors specific to Tracy
     )
 
 set(YOSHIPBR_HEADER_FILES
@@ -58,6 +59,9 @@ set(YOSHIPBR_HEADER_FILES
     ../include/YoshiPBR/ysTypes.h
     ../include/YoshiPBR/ysUnitTests.h
     )
+
+#TODO: As soon as I enable this, Tracy initialization barfs complaining about my CPU (i7-6700) missing RDTSC instruction. This happens for the provided example client applications as well.
+add_definitions(-DTRACY_ENABLE)
 
 add_library(YoshiPBR STATIC ${YOSHIPBR_SOURCE_FILES} ${YOSHIPBR_HEADER_FILES})
 target_include_directories(YoshiPBR PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include)
